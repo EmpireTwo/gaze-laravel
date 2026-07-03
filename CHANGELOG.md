@@ -292,6 +292,17 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
 
 ### Fixed
 
+- The `PHP 8.2 / prefer-lowest` CI leg pinned a stale `GAZE_VERSION: "0.11.1"`
+  literal while `BinaryDownloader::PINNED_VERSION` had advanced to `0.11.2`. The
+  desync made `BinaryInstaller::install()` look for a version the test fixtures
+  never report, so the "already installed" short-circuit was skipped and two
+  `BinaryInstallerTest` cases fell through to the real network download path,
+  failing on every push to `main`. The leg now derives `GAZE_VERSION` from
+  `PINNED_VERSION` at runtime (mirroring the main test job's single source of
+  truth), and `BinaryInstallerTest` now resets the `GAZE_*` / `APP_ENV`
+  environment in `beforeEach` so the full-pipeline tests are hermetic regardless
+  of ambient exports — which also removes the host-local nondeterministic flake
+  in those two cases. No runtime behaviour changed.
 - The NER-download HTTP client is now bound as `gaze.http_client` instead of
   hijacking the global `Symfony\Contracts\HttpClient\HttpClientInterface`
   binding; host apps or packages that (perhaps unknowingly) relied on gaze's
