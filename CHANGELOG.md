@@ -4,6 +4,8 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-07-03
+
 ### Changed (BREAKING)
 
 - `GazeSafetyNetFailureException` no longer implements the `NonRetryable`,
