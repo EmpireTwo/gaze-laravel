@@ -20,17 +20,28 @@ upcoming release in full; per-minor guides for earlier versions live in
 2. **Namespace renamed `Naoray\GazeLaravel` → `CertaMesh\Gaze`** (BREAKING).
    Replace every `use Naoray\GazeLaravel\…` import. Class names inside the
    namespace are unchanged, and the `Gaze` facade alias still works.
-3. **New: `leak_report` surfaced as a `GazeSession` trust state** — read
+3. **Retry markers dropped from `GazeSafetyNetFailureException`** (BREAKING).
+   It no longer implements `NonRetryable` / `Retryable` / `RetryableWithAlert`;
+   replace any `instanceof` checks against it with `GazeRetryPolicy::classify($e)`
+   (or a `HasRetryDisposition` arm). Routing retries through the policy needs no
+   change.
+4. **Testing fakes implement contracts, not concrete services** (BREAKING for
+   tests). If a test type-hints a concrete service and receives a fake, switch
+   the hint to the matching `CertaMesh\Gaze\Contracts\*` interface. Application
+   code that resolves through the facade or container is unaffected.
+5. **New: `leak_report` surfaced as a `GazeSession` trust state** — read
    `coverageState()` / `hasSuspectedLeak()` instead of inferring safety from
    the detection count.
-4. **New: per-call NER threshold** — `Gaze::clean($text, threshold: 0.65)`,
+6. **New: per-call NER threshold** — `Gaze::clean($text, threshold: 0.65)`,
    with `gaze.ner_threshold` / `GAZE_NER_THRESHOLD` as the configurable
    default.
+7. **Binary pin `0.9.0` → `0.11.3`** — pure pin-forward, no adopter action; the
+   clean/restore round trip is byte-identical. Per-pin detail in
+   [docs/how-to/upgrading.md](docs/how-to/upgrading.md).
 
 The `[Unreleased]` section of [CHANGELOG.md](CHANGELOG.md) lists further
 additive surfaces (`Gaze::mask()`, `php artisan gaze:install`, restore
-telemetry, Laravel 13 support, binary pin `0.9.0` → `0.11.1`). None of them
-require migration steps.
+telemetry, Laravel 13 support). None of those require migration steps.
 
 ### 1. Composer package rename (BREAKING)
 
@@ -119,7 +130,98 @@ What the rename touches — and what it does not:
 - **`Gaze::fake()` / test doubles.** `Naoray\GazeLaravel\Testing\FakeGaze` →
   `CertaMesh\Gaze\Testing\FakeGaze`, same API.
 
-### 3. New: upstream `leak_report` as a `GazeSession` trust state
+### 3. Retry markers dropped from `GazeSafetyNetFailureException` (BREAKING)
+
+`GazeSafetyNetFailureException` previously implemented all three static retry
+markers at once — `NonRetryable`, `Retryable`, **and** `RetryableWithAlert`
+(`CertaMesh\Gaze\Queue\Contracts\*`). The real disposition lives in its
+variant-driven `is*()` methods, so a class that carried every marker
+simultaneously was ambiguous: any adopter branching on
+`$e instanceof NonRetryable` misclassified the retryable safety-net variants
+(`Timeout`, `Other`) as terminal and dead-lettered them.
+
+It now implements the new
+`CertaMesh\Gaze\Queue\Contracts\HasRetryDisposition` contract
+(`retryDisposition(): RetryAction`) and none of the static markers.
+`GazeRetryPolicy::classify()` consults `HasRetryDisposition` **before** any
+marker interface, so every documented variant classifies exactly as before and
+unknown upstream variants keep failing closed to `RetryAction::Fail`.
+
+**Migration — only if you branch on the markers by hand.** If you already route
+retries through `GazeRetryPolicy::classify()` (the documented path), you need no
+change. Otherwise replace `instanceof`-against-this-exception checks:
+
+```php
+// Before (≤ v0.11.x): brittle — the class carried all three markers at once.
+use CertaMesh\Gaze\Queue\Contracts\NonRetryable;
+
+if ($e instanceof NonRetryable) {
+    $job->fail($e);            // misfired for the Timeout / Other variants
+}
+
+// After (v0.12.0), option A — let the policy classify (recommended):
+use CertaMesh\Gaze\Queue\GazeRetryPolicy;
+use CertaMesh\Gaze\Queue\RetryAction;
+
+match (GazeRetryPolicy::classify($e)) {
+    RetryAction::ReleaseWithBackoff => $job->release($backoff),
+    RetryAction::ReleaseWithAlert   => $job->release($backoff), // + fire your infra alert
+    RetryAction::Throw              => throw $e,
+    RetryAction::Fail               => $job->fail($e),
+};
+
+// After (v0.12.0), option B — read the disposition directly:
+use CertaMesh\Gaze\Queue\Contracts\HasRetryDisposition;
+
+if ($e instanceof HasRetryDisposition) {
+    $action = $e->retryDisposition();   // RetryAction
+}
+```
+
+The `is*()` helpers (`isRetryable()`, `isRetryableWithAlert()`,
+`isNonRetryable()`) and `safetyNetVariant()` are unchanged. This is a pre-1.0
+break; the `HasRetryDisposition` contract freezes at 1.0.
+
+### 4. Service + testing contracts extraction (BREAKING for tests)
+
+Every concrete service now implements a matching interface under
+`CertaMesh\Gaze\Contracts` (`Gaze`, `AuditService`, `PurgeBuilder`,
+`QueryBuilder`, `DaemonManager`, `DaemonSession`). The container binds the
+**contract** canonically and aliases the concrete FQCN to it, so
+`app(CertaMesh\Gaze\Gaze::class)` and
+`app(CertaMesh\Gaze\Contracts\Gaze::class)` resolve the same singleton, the
+`Gaze` facade accessor resolves the contract, and `Gaze::fake()` swaps the
+contract binding. Runtime resolution through the facade or the container is
+unaffected — this is transparent for application code.
+
+The break is in **tests**. The fakes (`FakeGaze`, `FakeAuditService`,
+`FakeDaemonManager`, `FakeDaemonSession`, `FakePurgeBuilder`,
+`FakeQueryBuilder`) now *implement the contracts* instead of *extending the
+concrete services*, so a fake is no longer `instanceof` the concrete class.
+
+**Migration — only if a test type-hints a concrete service and receives a
+fake.** Switch the hint to the contract:
+
+```php
+// Before (≤ v0.11.x): fakes extended the concretes, so this accepted a fake.
+use CertaMesh\Gaze\Gaze;                 // concrete class
+function assertScrubbed(Gaze $gaze): void { /* … */ }
+
+// After (v0.12.0): hint the contract.
+use CertaMesh\Gaze\Contracts\Gaze;       // interface
+function assertScrubbed(Gaze $gaze): void { /* … */ }
+```
+
+The fake call-recording API (`cleanCalls()`, `maskCalls()`, the purge/daemon
+assertions) is unchanged. Value objects (`GazeSession`, `EncryptedBlob`,
+`Entry`, `CleanResponse`, `LeakReport`) intentionally stay concrete with no
+interface — type-hint those directly. As a paid-for-free fix, the fakes no
+longer bypass parent constructors (previously that left readonly promoted
+properties uninitialised, so any inherited method not overridden fataled with an
+uninitialised-typed-property `Error`), and `FakeDaemonManager::client()` now
+throws an explicit `LogicException` instead of fataling.
+
+### 5. New: upstream `leak_report` as a `GazeSession` trust state
 
 `Gaze::clean()` previously dropped the upstream `leak_report` — the pipeline's
 own coverage check — so callers could only infer safety from the detection
@@ -161,7 +263,7 @@ Details:
   [docs/reference/upstream-coverage.md](docs/reference/upstream-coverage.md)
   and [docs/explanation/security.md](docs/explanation/security.md).
 
-### 4. New: per-call NER threshold override
+### 6. New: per-call NER threshold override
 
 `Gaze::clean()` accepts an optional threshold that is forwarded to the binary
 as `--ner-threshold=<value>` (inclusive `0.0`–`1.0`).
@@ -182,6 +284,21 @@ Precedence: per-call argument > `gaze.ner_threshold` config (env
 `GAZE_NER_THRESHOLD`) > policy default (flag omitted). Values outside
 `0.0`–`1.0` throw `InvalidArgumentException`. Pure flag forwarding — no
 detection logic runs in PHP.
+
+### 7. Binary pin `0.9.0` → `0.11.3`
+
+The pinned upstream `gaze` binary advances from `0.9.0` (the version carried
+through the v0.11.x line) to **`0.11.3`**, folding three pin-forwards into this
+release (`0.9.0` → `0.11.1` → `0.11.2` → `0.11.3`). Each is a pure pin-forward —
+upstream correctness / supply-chain fixes and new default recognizers adopted
+purely by taking the binary, with no adapter surface, flag, or wire/default
+change; the clean/restore round trip stays byte-identical. `composer install` /
+`composer update` re-downloads and SHA256-verifies the pinned binary. Hold the
+previous one temporarily with `GAZE_VERSION=0.9.0` while you validate, then
+confirm `php artisan gaze:doctor` reports `0.11.3`. Per-pin detail (new
+recognizers, the Kiji NER loader fix, the restore token-ordinal tightening)
+lives in the `v0.9.0 → v0.11.1`, `v0.11.1 → v0.11.2`, and `v0.11.2 → v0.11.3`
+sections of [docs/how-to/upgrading.md](docs/how-to/upgrading.md).
 
 ## Earlier versions
 

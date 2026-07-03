@@ -7,15 +7,22 @@ Per-minor upgrade guide for `certamesh/gaze-laravel`. Pair with
 ## v0.11.1 → v0.12.0 (Unreleased)
 
 > **Canonical guide: [UPGRADING.md](../../UPGRADING.md) at the repo root.**
-> This release is BREAKING on identity only: the Composer package renames
-> `empiretwo/gaze-laravel` → `certamesh/gaze-laravel` (swap the requirement
-> and the `config.allow-plugins` key) and the PHP root namespace renames
+> Four BREAKING items land in this release: (1) the Composer package renames
+> `empiretwo/gaze-laravel` → `certamesh/gaze-laravel` (swap the requirement and
+> the `config.allow-plugins` key); (2) the PHP root namespace renames
 > `Naoray\GazeLaravel` → `CertaMesh\Gaze` (mechanical `use`-statement replace;
-> the `Gaze` facade alias is unchanged). It also adds the `GazeSession`
+> the `Gaze` facade alias is unchanged); (3) `GazeSafetyNetFailureException`
+> drops the `NonRetryable` / `Retryable` / `RetryableWithAlert` markers for the
+> new `HasRetryDisposition` contract — route retries through
+> `GazeRetryPolicy::classify()`; (4) the testing fakes implement the new
+> `CertaMesh\Gaze\Contracts\*` interfaces instead of extending the concrete
+> services — type-hint the contracts. It also adds the `GazeSession`
 > coverage/trust state (`coverageState()` / `hasSuspectedLeak()`) and a
 > per-call NER threshold (`Gaze::clean($text, threshold: 0.65)` with
-> `gaze.ner_threshold` / `GAZE_NER_THRESHOLD` as the default). Full steps,
-> before/after snippets, and the queued-payload caveat live in the root
+> `gaze.ner_threshold` / `GAZE_NER_THRESHOLD` as the default), and folds the
+> binary pin-forward to `0.11.3` (see the `v0.11.2 → v0.11.3` and
+> `v0.11.1 → v0.11.2` sections below). Full steps, before/after snippets, and
+> the queued-payload caveat live in the root
 > [UPGRADING.md](../../UPGRADING.md).
 
 ## v0.11.2 → v0.11.3
