@@ -128,7 +128,7 @@ jobs:
         with:
           php-version: "8.3"
 
-      - uses: ramsey/composer-install@v3
+      - uses: ramsey/composer-install@v4
         with:
           dependency-versions: highest
           # Skip the lockfile: it locks Symfony 8.x which requires PHP 8.4,
