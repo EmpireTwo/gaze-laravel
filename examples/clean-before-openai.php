@@ -19,6 +19,11 @@ declare(strict_types=1);
 |     model's tokenized reply back into real values — and only THEN can you
 |     act on them (send the email, confirm the SSN). The model never could:
 |     it only ever saw tokens, so it can neither leak nor act on the PII.
+|   • clean() also grades ITSELF. $session->coverageState() carries upstream's
+|     own coverage verdict (Verified / Unverified / Suspect), and
+|     $session->hasSuspectedLeak() is the hard red: a span may still carry raw
+|     PII in cleanText. Check it BEFORE the text crosses the boundary — a
+|     detection count is not a verification.
 |
 | That last point is the whole value proposition: reversibility. The model
 | drafts in tokens; restore() + the owner-side session re-enable the real,
@@ -30,6 +35,7 @@ declare(strict_types=1);
 | not as bare `php file.php` scripts — see examples/README.md.
 */
 
+use CertaMesh\Gaze\CoverageState;
 use CertaMesh\Gaze\Entry;
 use CertaMesh\Gaze\Facades\Gaze;
 use CertaMesh\Gaze\GazeSession;
@@ -98,12 +104,35 @@ function sendEmail(string $to, string $body): void
 $prompt = 'Email Jane Doe at jane.doe@example.com and confirm her SSN 123-45-6789 is on file.';
 
 $session = Gaze::clean($prompt);     // -> CertaMesh\Gaze\GazeSession (entries + ciphertext stay server-side)
+
+// Trust gate BEFORE anything crosses the model boundary. Don't gate on
+// $session->detections — a high count never proves nothing bled through.
+// hasSuspectedLeak() is the hard red: upstream's observer-only safety net
+// flagged a span that may STILL carry raw PII inside cleanText. That text is
+// not trusted to leave your server — stop, alert, keep the prompt owner-side.
+if ($session->hasSuspectedLeak()) {
+    report(new RuntimeException('gaze flagged a suspected PII leak — prompt withheld from the LLM'));
+    echo "→ suspected leak in the cleaned text — nothing sent to the model\n";
+
+    return;
+}
+
+// Anything short of Verified is amber, not red: coverage is partial, or there
+// was no leak_report to back a green at all. (Through the stock binary the
+// Suspect channel is absent, so Unverified is the strongest caution you'll
+// see.) Proceeding is a policy call — here we proceed but surface amber
+// honestly instead of implying a green we don't have.
+if ($session->coverageState() !== CoverageState::Verified) {
+    logger()->info('gaze coverage not verified', ['state' => $session->coverageState()->value]);
+}
+
 $draft = fakeOpenAi($session);       // the model drafts using ONLY tokens
 $final = Gaze::restore($session, $draft); // owner-side: tokens -> real values
 
 echo "ORIGINAL : {$prompt}\n\n";
 echo "CLEANED  : {$session->cleanText}\n";        // safe to send to the model
-echo "DETECTED : {$session->detections} value(s)\n\n";
+echo "DETECTED : {$session->detections} value(s)\n";
+echo 'COVERAGE : '.$session->coverageState()->value."\n\n"; // upstream's verdict on its own redaction
 echo "MODEL    : {$draft}\n\n";                   // the model only ever saw tokens
 echo "RESTORED : {$final}\n\n";                   // real values back, owner-side
 

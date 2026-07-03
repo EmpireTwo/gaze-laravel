@@ -13,7 +13,7 @@
 use CertaMesh\Gaze\Facades\Gaze;
 
 // 1. Strip PII / PHI / secrets before the prompt leaves your app.
-$session = Gaze::clean($request->string('body'));
+$session = Gaze::clean($request->input('body'));
 
 // 2. Send only pseudonymized text across the model boundary.
 $reply = $llm->complete($session->cleanText);
@@ -119,7 +119,7 @@ For the CI allow-list, the `GAZE_SKIP_BINARY_DOWNLOAD` / `GAZE_VERSION` /
 ```php
 use CertaMesh\Gaze\Facades\Gaze;
 
-$session = Gaze::clean($request->string('body'));
+$session = Gaze::clean($request->input('body'));
 $reply   = $llm->complete($session->cleanText);
 
 return Gaze::restore($session, $reply);

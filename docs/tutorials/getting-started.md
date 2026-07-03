@@ -33,7 +33,7 @@ class EmailDraftController extends Controller
 {
     public function draft(Request $request): JsonResponse
     {
-        $session = Gaze::clean($request->string('body'));
+        $session = Gaze::clean($request->input('body'));
         // $session->cleanText is safe for your LLM — real PII replaced with tokens
 
         $llmReply = $this->callLlm($session->cleanText);
@@ -45,6 +45,20 @@ class EmailDraftController extends Controller
     }
 }
 ```
+
+> **Note — pass a `string`, not a `Stringable`.** `clean(string $text)` takes a
+> native `string`, but `$request->string('body')` returns an
+> `Illuminate\Support\Stringable` object — under a `declare(strict_types=1)`
+> caller PHP will not coerce it, and the call fatals with a `TypeError`. Use
+> `$request->input('body')` as above, or cast explicitly:
+> `(string) $request->string('body')`.
+
+Before you forward `$session->cleanText`, you can also ask the session how much
+it trusts its own redaction: `$session->coverageState()` returns upstream's
+coverage verdict (`Verified` / `Unverified` / `Suspect`) and
+`$session->hasSuspectedLeak()` flags a possible bleed-through — see the
+[security model](../explanation/security.md) and the trust check in
+[`examples/clean-before-openai.php`](../../examples/clean-before-openai.php).
 
 → [Blob lifecycle, Livewire patterns, queue jobs, conversational-loop guidance](../../README.md#blob-lifecycle)
 
