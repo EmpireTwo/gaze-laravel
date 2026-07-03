@@ -41,13 +41,20 @@ upcoming release in full; per-minor guides for earlier versions live in
    `php artisan gaze:install --force` (or `gaze:install:binary --force`) to pull
    the newly pinned build. A plain `gaze:install:binary` (no `--force`) is a
    no-op when any runnable `gaze` already resolves — it does not compare the
-   installed version against the pin.
-4. **`gaze:doctor` does not flag a stale pin.** Doctor reports the installed
-   binary's `--version` string but does **not** fail when it lags the pinned
-   version — as long as a runnable binary and a valid policy/encrypter resolve,
-   it reports `OK`. So after a pin bump doctor will show the *old* version and
-   still pass; treat re-running `gaze:install --force` as the deliberate step,
-   not something doctor will nag you into.
+   installed version against the pin (but `gaze:doctor` now warns about the
+   mismatch — see §4).
+4. **`gaze:doctor` now warns on a stale pin (but still doesn't fail).** After a
+   pin bump, doctor compares the installed binary's reported `--version` against
+   the package's pinned version and, on a mismatch, adds a `pinned version`
+   detail row plus a warning carrying the exact fix:
+   `php artisan gaze:install --force`. It **warns, never fails** — the exit code
+   stays `0` as long as a runnable binary and a valid policy/encrypter resolve,
+   so a lagging binary won't break a CI gate that runs `gaze:doctor`. The
+   warning softens to "expected" and drops the `--force` hint when you have
+   deliberately opted out of the pin via `GAZE_BINARY` (an adopter-built binary)
+   or `GAZE_VERSION` (a version you pinned yourself). So after a pin bump doctor
+   surfaces the gap instead of silently passing — re-run
+   `php artisan gaze:install --force` to clear it.
 
 ### Optional: keep the auto-download behaviour, without the plugin
 
