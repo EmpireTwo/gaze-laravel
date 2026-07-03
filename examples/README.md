@@ -9,7 +9,7 @@ exposes it through Laravel surfaces (Facade, artisan, config).
 
 | Example | What it shows |
 | --- | --- |
-| [`clean-before-openai.php`](./clean-before-openai.php) | **(Primary)** the core `clean` → send `cleanText` → `restore` round-trip before an OpenAI-style call. |
+| [`clean-before-openai.php`](./clean-before-openai.php) | **(Primary)** the core `clean` → trust check → send `cleanText` → `restore` round-trip before an OpenAI-style call. Gates on `$session->hasSuspectedLeak()` / `coverageState()` — upstream's own coverage verdict — before anything crosses the boundary. |
 | [`queued-job-clean.php`](./queued-job-clean.php) | the same round-trip inside a `ShouldQueue` Job — agentic-first, one session per unit of work, no plaintext persisted. |
 | [`livewire-chat.php`](./livewire-chat.php) | multi-turn chat that keeps the `GazeSession` out of Livewire wire state. |
 
