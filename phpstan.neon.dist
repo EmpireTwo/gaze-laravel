@@ -19,6 +19,11 @@ parameters:
         -
             identifier: function.alreadyNarrowedType
             path: tests/Feature/ContractConformanceTest.php
+        # --- NerInstallExceptionTest (#128) pins the exception hierarchy with
+        #     is_subclass_of(); statically provable for the same reason. ---
+        -
+            identifier: function.alreadyNarrowedType
+            path: tests/Unit/Install/NerInstallExceptionTest.php
         # --- pest v3: test-closure $this typed as the PHPUnit TestCase ---
         -
             message: '#^Access to an undefined property PHPUnit\\Framework\\TestCase::\$#'
