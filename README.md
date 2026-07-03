@@ -212,9 +212,10 @@ earlier versions live in
 [`docs/how-to/upgrading.md`](./docs/how-to/upgrading.md);
 pair them with the upstream binary's
 [UPGRADE.md](https://github.com/CertaMesh/gaze/blob/main/UPGRADE.md). The current
-pin is **v0.11.2** — see the `v0.11.1 → v0.11.2` section for what the pin bump
-brings (new default recognizers, `gaze setup`, NER loader fix), and the
-`v0.9.0 → v0.11.1` section for the earlier adoption notes, the opt-in
+pin is **v0.11.3** — see the `v0.11.2 → v0.11.3` section for the supply-chain +
+correctness pin-forward (no new adapter surface, no wire/default change), the
+`v0.11.1 → v0.11.2` section for the new default recognizers and NER loader fix,
+and the `v0.9.0 → v0.11.1` section for the earlier adoption notes, the opt-in
 restore-telemetry surface (and its audit-trail-not-DLP caveat), and the NER
 fail-closed / byte-exact restore rationale.
 

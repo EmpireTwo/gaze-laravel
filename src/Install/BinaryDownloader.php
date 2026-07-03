@@ -29,7 +29,7 @@ use Symfony\Component\Process\Process;
 class BinaryDownloader
 {
     /** Pinned per gaze-laravel release. Bumped intentionally. */
-    public const PINNED_VERSION = '0.11.2';
+    public const PINNED_VERSION = '0.11.3';
 
     /** Canonical, hard-pinned release base. */
     public const RELEASE_BASE = 'https://github.com/CertaMesh/gaze/releases/download';
@@ -168,7 +168,7 @@ class BinaryDownloader
 
         $output = $process->getOutput();
 
-        // Extract the version token (e.g. `gaze 0.11.2` → `0.11.2`), then
+        // Extract the version token (e.g. `gaze 0.11.3` → `0.11.3`), then
         // compare exactly. Pre-release/build suffixes are part of the token.
         if (preg_match('/\b(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)\b/', $output, $m) !== 1) {
             return false;
