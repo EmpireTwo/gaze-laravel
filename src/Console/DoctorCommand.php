@@ -7,6 +7,7 @@ namespace CertaMesh\Gaze\Console;
 use CertaMesh\Gaze\BinaryResolver;
 use CertaMesh\Gaze\Exceptions\GazeBinaryMissingException;
 use CertaMesh\Gaze\Gaze;
+use CertaMesh\Gaze\Install\BinaryDownloader;
 use CertaMesh\Gaze\Install\KijiArtifacts;
 use Devium\Toml\Toml;
 use Illuminate\Console\Command;
@@ -42,6 +43,7 @@ final class DoctorCommand extends Command
         }
 
         $this->components->twoColumnDetail('version', trim($version->output()));
+        $this->warnOnPinnedVersionMismatch($version->output(), $config);
 
         $policy = (string) $config->get('gaze.policy_path', '');
         $this->components->twoColumnDetail('policy', is_file($policy) ? $policy : '<fg=red>missing</>');
@@ -92,6 +94,70 @@ final class DoctorCommand extends Command
         $this->components->twoColumnDetail('status', '<fg=green>OK</>');
 
         return self::SUCCESS;
+    }
+
+    /**
+     * P7 doctor-before-failure: surface the post-#139 gap where an installed
+     * binary silently lags the package's pinned version after an upgrade.
+     *
+     * The Composer plugin that re-installed the binary on `composer update` was
+     * removed in v0.13.0, so `gaze:install --force` is the only refresh path. A
+     * package upgrade that bumps {@see BinaryDownloader::PINNED_VERSION} now
+     * leaves the old binary in place with no signal until a runtime feature is
+     * missing. Doctor closes that gap here.
+     *
+     * WARN, never FAIL — a deliberately held-back binary is legitimate, so this
+     * follows the warn-without-exit-flip convention of the proxy / daemon /
+     * restore-telemetry probes (none of them flip the exit code either):
+     *   - `GAZE_BINARY` points at an adopter-built binary (source builds,
+     *     unsupported platforms) — the GitHub-release pin does not apply.
+     *   - `GAZE_VERSION` pins a different version on purpose.
+     * When either opt-out is set the message softens to "expected" and drops the
+     * `--force` hint, since the adopter has explicitly opted out of the pin.
+     */
+    private function warnOnPinnedVersionMismatch(string $versionOutput, ConfigRepository $config): void
+    {
+        $reported = BinaryDownloader::parseVersion($versionOutput);
+        $pinned = BinaryDownloader::PINNED_VERSION;
+
+        // Unparseable output is not this probe's concern (the version detail
+        // already shows the raw string); a match is silent, like the other
+        // problem-only probes.
+        if ($reported === null || $reported === $pinned) {
+            return;
+        }
+
+        $binary = $config->get('gaze.binary');
+        $explicitBinary = is_string($binary) && $binary !== '';
+        $explicitVersion = ($env = getenv('GAZE_VERSION')) !== false && $env !== '';
+
+        if ($explicitBinary || $explicitVersion) {
+            $optOut = $explicitBinary ? 'GAZE_BINARY' : 'GAZE_VERSION';
+            $this->components->twoColumnDetail(
+                'pinned version',
+                "<fg=yellow>{$reported} (pin v{$pinned}, {$optOut} set)</>"
+            );
+            $this->warn(
+                "gaze binary reports v{$reported} but this package pins v{$pinned}. "
+                ."{$optOut} is set, so this mismatch is expected — you have opted out "
+                .'of the pin. Ignore if intentional.'
+            );
+
+            return;
+        }
+
+        $this->components->twoColumnDetail(
+            'pinned version',
+            "<fg=yellow>{$reported} (expected v{$pinned})</>"
+        );
+        $this->warn(
+            "gaze binary reports v{$reported} but this package pins v{$pinned}. "
+            .'A package upgrade bumped the pin without refreshing the binary '
+            .'(the Composer auto-install plugin was removed in v0.13.0).'
+        );
+        // Keep the actionable hint on its own short line so it survives console
+        // width-wrapping (a wrapped long line would split the command token).
+        $this->warn('Run `php artisan gaze:install --force` to install the pinned binary.');
     }
 
     private function warnIfDeprecatedRulepack(ConfigRepository $config, string $policyPath): void

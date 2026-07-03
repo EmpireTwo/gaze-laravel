@@ -360,3 +360,74 @@ it('passes the restore-telemetry probe when on and the audit_db_path parent is w
         @rmdir($dir);
     }
 });
+
+it('does not warn about the pin when the binary version matches PINNED_VERSION', function () {
+    $this->app->instance(
+        BinaryResolver::class,
+        new BinaryResolver(explicitPath: '/fake/gaze', vendorBinPath: '/none'),
+    );
+    $this->app['config']->set('gaze.policy_path', __DIR__.'/../../resources/policy.toml');
+
+    Process::fake(['*' => Process::result(output: 'gaze '.BinaryDownloader::PINNED_VERSION."\n")]);
+
+    $this->artisan('gaze:doctor')
+        ->assertExitCode(0)
+        ->doesntExpectOutputToContain('this package pins')
+        ->doesntExpectOutputToContain('pinned version');
+});
+
+it('warns with the gaze:install --force hint when the installed binary lags PINNED_VERSION', function () {
+    $this->app->instance(
+        BinaryResolver::class,
+        new BinaryResolver(explicitPath: '/fake/gaze', vendorBinPath: '/none'),
+    );
+    $this->app['config']->set('gaze.policy_path', __DIR__.'/../../resources/policy.toml');
+    // Guard against a host GAZE_BINARY leaking into the soften branch.
+    $this->app['config']->set('gaze.binary', null);
+
+    Process::fake(['*' => Process::result(output: "gaze 0.10.0\n")]);
+
+    $this->artisan('gaze:doctor')
+        ->assertExitCode(0)
+        ->expectsOutputToContain('but this package pins v'.BinaryDownloader::PINNED_VERSION)
+        ->expectsOutputToContain('php artisan gaze:install --force');
+});
+
+it('softens the pin-mismatch message and drops the --force hint when GAZE_BINARY is set', function () {
+    $this->app->instance(
+        BinaryResolver::class,
+        new BinaryResolver(explicitPath: '/fake/gaze', vendorBinPath: '/none'),
+    );
+    $this->app['config']->set('gaze.policy_path', __DIR__.'/../../resources/policy.toml');
+    // An adopter-set GAZE_BINARY (source build / unsupported platform) opts out
+    // of the GitHub-release pin, so the mismatch is expected, not actionable.
+    $this->app['config']->set('gaze.binary', '/opt/custom/gaze');
+
+    Process::fake(['*' => Process::result(output: "gaze 0.10.0\n")]);
+
+    $this->artisan('gaze:doctor')
+        ->assertExitCode(0)
+        ->expectsOutputToContain('GAZE_BINARY is set')
+        ->doesntExpectOutputToContain('php artisan gaze:install --force');
+});
+
+it('softens the pin-mismatch message when GAZE_VERSION pins a different version', function () {
+    $this->app->instance(
+        BinaryResolver::class,
+        new BinaryResolver(explicitPath: '/fake/gaze', vendorBinPath: '/none'),
+    );
+    $this->app['config']->set('gaze.policy_path', __DIR__.'/../../resources/policy.toml');
+    $this->app['config']->set('gaze.binary', null);
+
+    Process::fake(['*' => Process::result(output: "gaze 0.9.5\n")]);
+
+    putenv('GAZE_VERSION=0.9.5');
+    try {
+        $this->artisan('gaze:doctor')
+            ->assertExitCode(0)
+            ->expectsOutputToContain('GAZE_VERSION is set')
+            ->doesntExpectOutputToContain('php artisan gaze:install --force');
+    } finally {
+        putenv('GAZE_VERSION');
+    }
+});
