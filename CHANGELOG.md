@@ -4,6 +4,25 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
 
 ## [Unreleased]
 
+### Removed (BREAKING)
+
+- The Composer plugin (`CertaMesh\Gaze\Install\GazeInstallerPlugin`) is removed
+  and the package `type` reverts from `composer-plugin` to `library`. The binary
+  no longer auto-downloads on `composer install` / `composer update`;
+  `php artisan gaze:install` (or the `gaze:install:binary` sub-command) is now
+  the only provisioning path — explicit over magic, and no `allow-plugins`
+  friction on first install. **Migration:** delete the now-inert
+  `config.allow-plugins."certamesh/gaze-laravel"` key from your app's
+  `composer.json` and run `php artisan gaze:install` after upgrading. Binary pin
+  bumps now require an explicit `gaze:install --force`; `gaze:doctor` reports the
+  installed version but does not fail on a stale pin. Adopters who want the old
+  auto-download behaviour can wire `CertaMesh\Gaze\Install\BinaryInstaller::postInstall`
+  into a Composer `post-update-cmd` script (honours `GAZE_SKIP_BINARY_DOWNLOAD`).
+  `BinaryInstaller`, `BinaryDownloader`, and everything `gaze:install` uses are
+  unchanged — only the plugin trigger is gone. Removed the `composer-plugin-api`
+  requirement and the `extra.class` plugin declaration. See
+  [UPGRADING.md](UPGRADING.md) (`v0.12.0 → v0.13.0`) for the full guide.
+
 ## [0.12.0] - 2026-07-03
 
 ### Changed (BREAKING)

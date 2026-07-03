@@ -6,7 +6,70 @@ upcoming release in full; per-minor guides for earlier versions live in
 [CHANGELOG.md](CHANGELOG.md) and the upstream binary's
 [UPGRADE.md](https://github.com/CertaMesh/gaze/blob/main/UPGRADE.md).
 
-## v0.11.1 → v0.12.0 (Unreleased)
+## v0.12.0 → v0.13.0 (Unreleased)
+
+> Pre-1.0 SemVer: this breaking change lands on a MINOR bump. v0.13.0 removes
+> the Composer plugin entirely. `php artisan gaze:install` (and its
+> `gaze:install:binary` sub-command) is now the **only** way the `gaze` binary
+> is provisioned. Nothing downloads on `composer install` / `composer update`
+> anymore. Rationale: explicit over magic, and no `allow-plugins` friction on
+> first install.
+
+### TL;DR
+
+1. **The Composer plugin is gone (BREAKING).** `GazeInstallerPlugin` — the
+   plugin that auto-downloaded `vendor/bin/gaze` on `composer install`/`update`
+   — is removed. The package `type` reverts from `composer-plugin` to `library`.
+2. **Migration is two steps** for an app that relied on the auto-download:
+   - Remove the now-inert allow-plugins key from your app's `composer.json`:
+     ```diff
+      "config": {
+          "allow-plugins": {
+     -        "certamesh/gaze-laravel": true
+          }
+      }
+     ```
+     It no longer maps to a plugin, so Composer simply ignores it; deleting it
+     just keeps the file honest.
+   - Run `php artisan gaze:install` after upgrading. This is the canonical,
+     idempotent provisioner (binary + config + policy + optional NER/safety-net),
+     ending on a `gaze:doctor` green-check. Run `gaze:install:binary` alone if
+     you only want the binary.
+3. **Binary pin bumps now need an explicit re-install.** With no plugin, a
+   future gaze-laravel release that bumps the pinned binary version will **not**
+   fetch the new binary on `composer update`. Re-run
+   `php artisan gaze:install --force` (or `gaze:install:binary --force`) to pull
+   the newly pinned build. A plain `gaze:install:binary` (no `--force`) is a
+   no-op when any runnable `gaze` already resolves — it does not compare the
+   installed version against the pin.
+4. **`gaze:doctor` does not flag a stale pin.** Doctor reports the installed
+   binary's `--version` string but does **not** fail when it lags the pinned
+   version — as long as a runnable binary and a valid policy/encrypter resolve,
+   it reports `OK`. So after a pin bump doctor will show the *old* version and
+   still pass; treat re-running `gaze:install --force` as the deliberate step,
+   not something doctor will nag you into.
+
+### Optional: keep the auto-download behaviour, without the plugin
+
+If you preferred the binary landing automatically on every `composer update`,
+wire the Composer-context installer into a `post-update-cmd` script in your
+app's `composer.json` — explicit, opt-in, no plugin:
+
+```json
+"scripts": {
+    "post-update-cmd": [
+        "CertaMesh\\Gaze\\Install\\BinaryInstaller::postInstall"
+    ]
+}
+```
+
+`GAZE_SKIP_BINARY_DOWNLOAD=1` suppresses that fetch (CI, sandboxes), exactly as
+it did for the old plugin. `GAZE_VERSION` and `GAZE_RELEASE_BASE` behave as
+before on this path. Note: the `gaze:install:binary` artisan command does **not**
+honour `GAZE_SKIP_BINARY_DOWNLOAD` — that toggle is specific to the Composer
+script/installer path shown here.
+
+## v0.11.1 → v0.12.0
 
 > Pre-1.0 SemVer: breaking changes land on a MINOR bump. v0.12.0 carries two
 > **BREAKING** identity changes — the Composer package name and the PHP root

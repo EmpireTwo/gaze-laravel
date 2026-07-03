@@ -99,17 +99,25 @@ finer control:
   (legacy alias: `gaze:install-ner`).
 - `gaze:install:safety-net` — wire an `opf` or `kiji` backend into `.env`.
 
-### Composer plugin (optional)
+### Automating the binary install (optional)
 
-The package also ships a Composer plugin
-(`CertaMesh\Gaze\Install\GazeInstallerPlugin`) that auto-downloads the binary on
-`composer install`. It is **optional** — `gaze:install` is the canonical path —
-but remains available for adopters who prefer the binary to land automatically.
-On first install Composer asks whether to allow the plugin; pick `y` to enable
-auto-download, or `n` and provision the binary yourself.
+`gaze:install` is explicit by design — nothing runs on `composer install` or
+`composer update`. Adopters who want the old auto-download behaviour back (the
+binary refreshed after every Composer update, no plugin) can wire the
+Composer-context installer into a `post-update-cmd` script in their app's
+`composer.json`:
 
-For the CI allow-list, the `GAZE_SKIP_BINARY_DOWNLOAD` / `GAZE_VERSION` /
-`GAZE_RELEASE_BASE` env overrides, and the full config reference, see
+```json
+"scripts": {
+    "post-update-cmd": [
+        "CertaMesh\\Gaze\\Install\\BinaryInstaller::postInstall"
+    ]
+}
+```
+
+Set `GAZE_SKIP_BINARY_DOWNLOAD=1` to suppress that fetch (e.g. in CI, where the
+binary is provisioned separately). The `GAZE_VERSION` / `GAZE_RELEASE_BASE`
+overrides and the full config reference live in
 [Configuration](./docs/reference/configuration.md).
 
 **New here?** Walk through the [getting started guide](./docs/tutorials/getting-started.md).
@@ -192,7 +200,7 @@ Opt-in surfaces — reach for them once the basic clean / restore round-trip is 
 - [Proxy daemon](./docs/how-to/proxy-daemon.md)
 - [Daemon (JSONL stdio)](./docs/how-to/daemon.md)
 - [SafetyNet (OPF + Kiji)](./docs/how-to/safety-net.md)
-- [Upgrading](./docs/how-to/upgrading.md)
+- [Upgrading & migrations](./UPGRADING.md)
 - [Upstream coverage](./docs/reference/upstream-coverage.md)
 
 ## Security
@@ -203,25 +211,9 @@ should cross the model boundary; restore happens owner-side. See the
 [Security model](./docs/explanation/security.md) for guarantees, responsibilities,
 and compliance boundaries.
 
-## Upgrading
-
-The migration guide for the upcoming release — the `certamesh/gaze-laravel`
-package rename and the `Naoray\GazeLaravel` → `CertaMesh\Gaze` namespace
-rename — lives in [UPGRADING.md](./UPGRADING.md). Per-minor walkthroughs for
-earlier versions live in
-[`docs/how-to/upgrading.md`](./docs/how-to/upgrading.md);
-pair them with the upstream binary's
-[UPGRADE.md](https://github.com/CertaMesh/gaze/blob/main/UPGRADE.md). The current
-pin is **v0.11.3** — see the `v0.11.2 → v0.11.3` section for the supply-chain +
-correctness pin-forward (no new adapter surface, no wire/default change), the
-`v0.11.1 → v0.11.2` section for the new default recognizers and NER loader fix,
-and the `v0.9.0 → v0.11.1` section for the earlier adoption notes, the opt-in
-restore-telemetry surface (and its audit-trail-not-DLP caveat), and the NER
-fail-closed / byte-exact restore rationale.
-
 ## Known limitations
 
-- Pre-built binary auto-downloads currently cover Linux x86_64 and macOS arm64.
+- Pre-built binaries currently cover Linux x86_64 and macOS arm64.
   Intel Mac users must install `gaze` from source and set `GAZE_BINARY`.
 - NER model artifacts are not bundled in the Composer package. `gaze:install`
   fetches them on demand (or run `gaze:install:ner` directly); pass `--skip-ner`
