@@ -311,6 +311,11 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
   emails), and `FakeGaze` additionally masks real email addresses to
   `<Email_1>`. The daemon fake also computes `clean_text` once per request
   instead of twice.
+- `gaze:daemon:status` process discovery on macOS. The command used the Linux
+  procps `pgrep -af` spelling, which on darwin means "include ancestors" and
+  emits bare PIDs, so every discovered daemon rendered as `unknown`; darwin now
+  uses `pgrep -fl`, the command's own PID is excluded from matches, and the
+  unused `$config` parameter was dropped from `handle()`.
 - Correct the stale `gaze:doctor` core-extended deprecation notice. It
   claimed "Removal target: v0.10.0", but upstream never removed the pack —
   it still soft-aliases `core-extended` → `core` with a runtime warning
