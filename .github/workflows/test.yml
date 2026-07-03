@@ -88,7 +88,11 @@ jobs:
 
     env:
       GAZE_SKIP_BINARY_DOWNLOAD: "1"
-      GAZE_VERSION: "0.11.1"
+      # GAZE_VERSION is exported after "Install lowest dependencies" from the
+      # single source of truth, BinaryDownloader::PINNED_VERSION — no literal
+      # here. A stale literal (this leg pinned "0.11.1" while the constant moved
+      # to 0.11.2) desyncs the "already installed" short-circuit and drops the
+      # BinaryInstaller tests onto the real network path.
 
     steps:
       - name: Checkout
@@ -111,6 +115,12 @@ jobs:
 
       - name: Install lowest dependencies
         run: composer update --no-interaction --prefer-dist --prefer-lowest --prefer-stable
+
+      - name: Export pinned gaze version
+        # Single source of truth: BinaryDownloader::PINNED_VERSION. Keeps the CI
+        # pin from drifting when the constant is bumped (mirrors the test job).
+        run: |
+          echo "GAZE_VERSION=$(php -r 'require "vendor/autoload.php"; echo CertaMesh\Gaze\Install\BinaryDownloader::PINNED_VERSION;')" >> "$GITHUB_ENV"
 
       - name: Run tests
         run: composer test

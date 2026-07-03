@@ -6,6 +6,18 @@ use CertaMesh\Gaze\Install\BinaryInstaller;
 use Composer\IO\BufferIO;
 
 beforeEach(function () {
+    // Hermetic env baseline. The postInstall/install pipeline reads GAZE_VERSION,
+    // GAZE_SKIP_BINARY_DOWNLOAD, GAZE_RELEASE_BASE, GAZE_GITHUB_TOKEN and APP_ENV
+    // from the ambient environment. An inherited GAZE_VERSION that differs from
+    // PINNED_VERSION (as the prefer-lowest CI leg's stale "0.11.1" literal did,
+    // and as a stray shell export can on a dev host) desyncs the "already
+    // installed" short-circuit and drops these tests onto the real network path —
+    // deterministically red in CI, nondeterministically flaky locally. Reset to a
+    // known-clean slate so every test controls only the vars it sets itself.
+    foreach (['GAZE_VERSION', 'GAZE_SKIP_BINARY_DOWNLOAD', 'GAZE_RELEASE_BASE', 'GAZE_GITHUB_TOKEN', 'APP_ENV'] as $var) {
+        putenv($var);
+    }
+
     $this->tmpDir = sys_get_temp_dir().'/gaze-laravel-installer-'.bin2hex(random_bytes(6));
     mkdir($this->tmpDir, 0755, true);
 });
