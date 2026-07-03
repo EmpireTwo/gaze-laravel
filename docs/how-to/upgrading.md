@@ -18,6 +18,34 @@ Per-minor upgrade guide for `certamesh/gaze-laravel`. Pair with
 > before/after snippets, and the queued-payload caveat live in the root
 > [UPGRADING.md](../../UPGRADING.md).
 
+## v0.11.2 → v0.11.3
+
+> Keyed by the **upstream binary pin** (advances from `gaze` v0.11.2 to
+> **v0.11.3**). Pure pin-forward — supply-chain hygiene, leak fixes, and a
+> restore-parser tightening; no new adapter surface, no new flag, no
+> wire-contract change. The clean/restore round trip is unchanged.
+
+1. **Binary pin bump `0.11.2` → `0.11.3`.** `BinaryDownloader::PINNED_VERSION`
+   is now `0.11.3`; `composer install` / `composer update` re-downloads and
+   SHA256-verifies the pinned binary. Hold the previous binary temporarily with
+   `GAZE_VERSION=0.11.2` while you validate.
+2. **Supply-chain hygiene — no adopter action.** Upstream v0.11.3 pins the
+   pdfium build input and drops a dead `daemonize` dependency. You inherit the
+   tighter upstream dependency graph purely by taking the pin.
+3. **Restore token-ordinal parsing tightened.** Upstream now parses restore
+   token ordinals as ASCII digits only. The adapter's clean/restore round trip
+   is byte-identical (verified against the real 0.11.3 binary); the change is a
+   correctness hardening for malformed/adversarial token input, not a
+   wire-contract change adopters can observe. No config change needed.
+4. **Help surface unchanged.** Every `gaze --help` / subcommand-help contract
+   snapshot is byte-identical to v0.11.2 — no new, changed, or removed flag, so
+   there is no new surface to promote.
+
+### Action required
+
+- **None.** Run `composer install` (or `composer update certamesh/gaze-laravel`)
+  and confirm `php artisan gaze:doctor` reports the pinned binary at `0.11.3`.
+
 ## v0.11.1 → v0.11.2
 
 > Keyed by the **upstream binary pin** (advances from `gaze` v0.11.1 to

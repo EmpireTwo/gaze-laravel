@@ -35,6 +35,18 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
 
 ### Changed
 
+- Bump the pinned upstream `gaze` binary from `0.11.2` to `0.11.3`. Pure
+  supply-chain + correctness pin-forward — no new adapter surface, no new flag,
+  no wire/default change. Verified against the real 0.11.3 binary: every
+  `gaze --help` / subcommand-help contract snapshot is byte-identical to
+  `0.11.2`. Upstream 0.11.3 ships supply-chain hygiene (pdfium build-input pin,
+  dead `daemonize` dependency dropped), observer-safety-net leak fixes, `restore`
+  token-ordinal parsing tightened to ASCII digits only, and property-test infra.
+  The restore-ordinal fix is a correctness hardening for malformed token input
+  and is not observable through the package's clean/restore round trip
+  (reversibility unchanged, NORTH_STAR §4). See `docs/how-to/upgrading.md`
+  (`v0.11.2 → v0.11.3`) and the new deltas table in
+  `docs/reference/upstream-coverage.md`.
 - Bump the pinned upstream `gaze` binary from `0.11.1` to `0.11.2`. Adopters
   get the new default recognizers for free by taking the pin: EU VAT IDs,
   ISO-length-gated IBANs, and spaced international E.164 phone numbers. The

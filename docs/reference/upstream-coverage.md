@@ -1,6 +1,6 @@
 # Upstream Coverage
 
-Living parity checklist for upstream `CertaMesh/gaze` v0.11.2.
+Living parity checklist for upstream `CertaMesh/gaze` v0.11.3.
 
 > Adopter usage: [docs/safety-net.md](../how-to/safety-net.md). Why surfaces land here vs. defer: [docs/NORTH_STAR.md](../NORTH_STAR.md) (surface promotion rule). GDPR posture for these surfaces (pseudonymization, storage limitation, erasure): [docs/explanation/gdpr.md](../explanation/gdpr.md) — adopter guidance, not legal advice.
 
@@ -250,10 +250,11 @@ exposes it via the `Gaze::daemon()` Facade chain, a flat config block,
 and TWO artisan commands. See [docs/daemon.md](../how-to/daemon.md) for the
 adopter quickstart.
 
-The upstream binary pin is now **v0.11.2**. The v0.9.1 → v0.11.1 hardening
+The upstream binary pin is now **v0.11.3**. The v0.9.1 → v0.11.1 hardening
 (NER fail-closed, byte-exact restore, strict manifest-restore) is all
 passthrough — no new daemon flag — see [Upstream v0.9.1 → v0.11.1 deltas](#upstream-v091--v0111-deltas).
-For the v0.11.2 pin deltas see [Upstream v0.11.1 → v0.11.2 deltas](#upstream-v0111--v0112-deltas).
+For the v0.11.2 pin deltas see [Upstream v0.11.1 → v0.11.2 deltas](#upstream-v0111--v0112-deltas);
+for the v0.11.3 pin deltas see [Upstream v0.11.2 → v0.11.3 deltas](#upstream-v0112--v0113-deltas).
 
 ### Commands
 
@@ -346,7 +347,7 @@ adopter surface, `defer` = documented non-goal.
 | TokenBridge index-search (#327) | **defer** | none | Verdict as adjudicated against v0.11.1. The "unencrypted on disk" leg of this rationale was resolved upstream in v0.11.2 (encrypted indexes at rest) — see the re-adjudicated entry in [Deferred](#deferred). |
 | `gaze-mcp-bridge` (#330) | **defer** | none | MCP server lifecycle — explicit non-goal. See Deferred. |
 | CLI accessibility gate (#287) | internal-only | none | Human-TTY affordance; the adapter always invokes with `--format=json`, so the gate never engages. No surface. |
-| `core-extended` rulepack | still-available alias | n/a | `gaze:doctor`'s "Removal target: v0.10.0" line was **stale** — upstream never removed the pack. It still soft-aliases through v0.11.2; documented as available, not removed. See [upgrading.md](../how-to/upgrading.md). |
+| `core-extended` rulepack | still-available alias | n/a | `gaze:doctor`'s "Removal target: v0.10.0" line was **stale** — upstream never removed the pack. It still soft-aliases through v0.11.3; documented as available, not removed. See [upgrading.md](../how-to/upgrading.md). |
 | `gaze-document` split (#279) | already-covered | none | OCR / document pipeline stays a deferred non-goal. See Deferred. |
 
 ## Upstream v0.11.1 → v0.11.2 deltas
@@ -361,6 +362,21 @@ verdict vocabulary as above.
 | Proxy PII-surface + email-TLD recognizer hardening | passthrough | PATCH | Correctness fixes inside the binary; nothing to forward. |
 | `gaze setup` (one-command onboarding: NER install + policy + doctor) | **defer** | none | The Laravel onboarding path is already covered by `php artisan gaze:install` / `gaze:install:ner` + `gaze:doctor`, which additionally handle the adapter-side pieces (config publish, binary pin) that upstream `setup` knows nothing about. Delegating those artisans to `gaze setup` internally is a future option, not a gap. |
 | TokenBridge: encrypted indexes at rest (ChaCha20-Poly1305, `GAZE_INDEX_KEY`, `os-keychain`), `gaze index ingest --on-residual redact\|strict`, real error detail | **defer** | none | Removes the plaintext-PII blocker from the v0.11.1 adjudication; the surface is now a **promotion candidate** — see the re-adjudicated entry in [Deferred](#deferred). |
+
+## Upstream v0.11.2 → v0.11.3 deltas
+
+Gap analysis for the v0.11.3 pin bump (upstream released 2026-07-03). Verified
+against the real 0.11.3 macOS arm64 binary (sha256-pinned): every `gaze --help`
+and subcommand-help contract snapshot is **byte-identical to v0.11.2** — no new,
+changed, or removed flag, so there is **no surface to promote**. Same verdict
+vocabulary as above.
+
+| Upstream change | Verdict | Adapter SemVer | Notes |
+|---|---|---|---|
+| Supply-chain hygiene: pdfium build-input pin, dead `daemonize` dependency dropped | passthrough | PATCH | Upstream dependency-graph hardening. Nothing crosses the CLI contract; adopters inherit it purely by taking the pin. No flag, no surface. |
+| Leak fixes (observer-only safety-net correctness) | passthrough | PATCH | Correctness fixes inside the binary's safety-net path. The `LeakReport` / `LeakSuspect` projection shape is unchanged — the contract enum + round-trip suites pass against the real 0.11.3 binary. |
+| `restore` token-ordinal parsing tightened to ASCII digits only | passthrough | PATCH | Hardens `restore` against malformed/adversarial token ordinals. The clean/restore round trip is byte-identical against the real binary (reversibility, NORTH_STAR §4); not adopter-observable through this package's wire shape. |
+| Property-test infra + restore cache (upstream internal) | n/a | none | Upstream test/perf internals. No CLI-contract effect, nothing to forward. |
 
 ## Restore telemetry (v0.11.x)
 
@@ -438,7 +454,7 @@ flow through (enforced by a hostile-fixture test).
 
 | Upstream surface | Reason |
 |---|---|
-| Per-detection byte spans (`start` / `end`) on `gaze clean --format=json` entries | **Upstream feature request.** As of the v0.11.2 pin, clean `--format=json` `entries[]` keys are exactly `{class, raw, token, family}` — there are **no byte offsets**. Computing span positions in PHP is a NORTH_STAR non-goal (it would re-derive detection geometry outside upstream). Blocked on upstream adding per-detection byte spans (start/end) to the clean `--format=json` contract; until then `Gaze::mask()` ships on the collision-safe token map instead. A `length()` / offset accessor on `Entry`/`GazeSession` lands as an additive MINOR once upstream emits the spans. |
+| Per-detection byte spans (`start` / `end`) on `gaze clean --format=json` entries | **Upstream feature request.** As of the v0.11.3 pin, clean `--format=json` `entries[]` keys are exactly `{class, raw, token, family}` — there are **no byte offsets**. Computing span positions in PHP is a NORTH_STAR non-goal (it would re-derive detection geometry outside upstream). Blocked on upstream adding per-detection byte spans (start/end) to the clean `--format=json` contract; until then `Gaze::mask()` ships on the collision-safe token map instead. A `length()` / offset accessor on `Entry`/`GazeSession` lands as an additive MINOR once upstream emits the spans. |
 | `--context-json` | P1 design item; needs PHP API design before exposure. |
 | `gaze mcp install --client=<name>` / `gaze mcp doctor` / `gaze mcp serve` | Opt-in `mcp` feature in upstream v0.7.0; needs `php artisan gaze:mcp:*` artisan surface design. Tracked separately. |
 | `gaze-mcp-bridge` (#330) | MCP server lifecycle — explicit NORTH_STAR non-goal. Not a Laravel idiom; lives upstream. Tracked with the other `gaze mcp *` surfaces above. |
