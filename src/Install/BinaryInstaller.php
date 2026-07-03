@@ -12,10 +12,11 @@ use Composer\Script\Event;
  * Composer-context adapter over {@see BinaryDownloader}.
  *
  * Keeps its historical `install(Composer, $io)` / `postInstall(Event)` surface
- * (referenced by root `composer.json` script entries and the
- * {@see GazeInstallerPlugin}) and resolves the release base in the Composer
- * trust context — `resolveReleaseBase()` pins the canonical base in production
- * so a `GAZE_RELEASE_BASE` override can never repoint a production download.
+ * (referenced by opt-in `composer.json` `post-update-cmd` / `post-install-cmd`
+ * script entries — see UPGRADING.md) and resolves the release base in the
+ * Composer trust context — `resolveReleaseBase()` pins the canonical base in
+ * production so a `GAZE_RELEASE_BASE` override can never repoint a production
+ * download.
  *
  * The download/verify pipeline itself lives in {@see BinaryDownloader}; the
  * static helpers below remain as thin delegating shims so existing call sites
@@ -29,10 +30,11 @@ final class BinaryInstaller
     private const RELEASE_BASE = BinaryDownloader::RELEASE_BASE;
 
     /**
-     * Composer script handler kept as a thin shim so root composer.json
-     * `post-install-cmd` / `post-update-cmd` entries that already reference
-     * this static keep working. New consumers get triggered via the
-     * GazeInstallerPlugin (extra.class) without any root config.
+     * Composer script handler kept as a thin shim so an adopter's opt-in
+     * `composer.json` `post-install-cmd` / `post-update-cmd` entry that
+     * references this static keeps working. Nothing runs on `composer install`
+     * by default now that the plugin is gone — wiring this is explicit (see
+     * UPGRADING.md); `php artisan gaze:install` remains the canonical path.
      */
     public static function postInstall(Event $event): void
     {

@@ -39,8 +39,7 @@ Queue/
   ├─ GazeRetryPolicy::classify(e) → RetryAction
   └─ GazeRetryPolicy::dispatch(e, job)
 
-Install/ (Composer time, not runtime)
-  ├─ GazeInstallerPlugin     – Composer plugin entry-point
+Install/ (install time — artisan gaze:install / gaze:install:binary, not runtime)
   ├─ BinaryInstaller         – downloads gaze binary, verifies SHA256
   └─ NerInstaller            – fetches NER model files, verifies SHA256
        └─ LaravelNerFetcher  – HTTP (Symfony HttpClient) + copy from package
@@ -133,7 +132,7 @@ The audit DB path is resolved in priority order:
 
 ## 4. Exception Taxonomy
 
-All exceptions extend `GazeException extends \RuntimeException` — including the `CertaMesh\Gaze\Install\Ner*Exception` family thrown by `gaze:install:ner` and the Composer plugin (via their `NerInstallException` base).
+All exceptions extend `GazeException extends \RuntimeException` — including the `CertaMesh\Gaze\Install\Ner*Exception` family thrown by `gaze:install:ner` (via their `NerInstallException` base).
 
 | Category | Base class | Retry contract | Exit bucket | Members |
 |---|---|---|---|---|

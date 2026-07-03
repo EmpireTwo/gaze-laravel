@@ -4,7 +4,21 @@ Per-minor upgrade guide for `certamesh/gaze-laravel`. Pair with
 [CHANGELOG.md](../../CHANGELOG.md) and the upstream binary's
 [UPGRADE.md](https://github.com/CertaMesh/gaze/blob/main/UPGRADE.md).
 
-## v0.11.1 → v0.12.0 (Unreleased)
+## v0.12.0 → v0.13.0 (Unreleased)
+
+> **Canonical guide: [UPGRADING.md](../../UPGRADING.md) at the repo root.**
+> One BREAKING item: the Composer plugin (`GazeInstallerPlugin`) is removed and
+> the package `type` reverts to `library`. `php artisan gaze:install` (and
+> `gaze:install:binary`) is now the only way the `gaze` binary is provisioned —
+> nothing downloads on `composer install` / `composer update`. Migration:
+> delete the now-inert `config.allow-plugins."certamesh/gaze-laravel"` key from
+> your app's `composer.json` and run `php artisan gaze:install` after upgrading.
+> Binary pin bumps now require an explicit `gaze:install --force`; `gaze:doctor`
+> reports the installed version but does not fail on a stale pin. Full steps and
+> the opt-in `post-update-cmd` recipe (which restores auto-download without a
+> plugin) live in the root [UPGRADING.md](../../UPGRADING.md).
+
+## v0.11.1 → v0.12.0
 
 > **Canonical guide: [UPGRADING.md](../../UPGRADING.md) at the repo root.**
 > Four BREAKING items land in this release: (1) the Composer package renames
