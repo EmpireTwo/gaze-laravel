@@ -240,6 +240,27 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
   `gaze:doctor` now also emits a warning when `policy.toml` cannot be parsed
   as TOML (previously the deprecated-rulepack check swallowed the error
   silently).
+- `Install\NerInstallException` (and its 7 `Ner*Exception` subclasses) now
+  extends `Exceptions\GazeException` instead of `\RuntimeException` directly,
+  so `catch (GazeException $e)` is the single catch-all surface for every
+  exception this package throws. Catch-behaviour implications:
+  - `catch (\RuntimeException)` and `catch (NerInstallException)` keep working
+    unchanged (`GazeException` itself extends `\RuntimeException`).
+  - `catch (GazeException)` now ALSO catches NER install failures — relevant
+    only if you invoke `NerInstaller`/`gaze:install:ner` inside such a block.
+  - `getCode()` on NER install exceptions now returns `exitCode()` (previously
+    always `0`), and constructing `NerManifestInvalidException`/
+    `NerTransportException` with a positional `int $code` second argument is no
+    longer possible — the base constructor is now
+    `(string $message = '', ?\Throwable $previous = null)`; use
+    `previous:` as a named argument.
+  - Inherited `GazeException` members are populated conservatively:
+    `$exitCode` mirrors `exitCode()`, `$stderrHash` is `hash('sha256', '')`
+    (no subprocess ran), `$variant` is `null`, `isCallerBug()` is `false`.
+    No `Queue\Contracts` retry interfaces are implemented, so
+    `GazeRetryPolicy` classification is unaffected. Nothing in the
+    `GazeException` constructor requires a Laravel app, so the Composer-plugin
+    install path (no app context) is unaffected.
 - `gaze:install-ner` renamed to `gaze:install:ner` (MINOR). The old name keeps
   working as a deprecated alias, so existing scripts are unaffected. A new `--yes`
   flag confirms a headless install WITHOUT re-downloading the model or overwriting
