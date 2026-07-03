@@ -1,6 +1,6 @@
 # Exception Reference
 
-All exceptions live under `CertaMesh\Gaze\Exceptions`. They form a typed hierarchy that maps directly to `gaze` binary exit codes and stderr JSON variants.
+Every exception this package throws extends `CertaMesh\Gaze\Exceptions\GazeException`, so `catch (GazeException $e)` is the single catch-all surface. Runtime exceptions live under `CertaMesh\Gaze\Exceptions` and map directly to `gaze` binary exit codes and stderr JSON variants; NER install exceptions live under `CertaMesh\Gaze\Install` and describe `gaze:install:ner` / Composer-plugin failures.
 
 ## Hierarchy
 
@@ -28,12 +28,22 @@ All exceptions live under `CertaMesh\Gaze\Exceptions`. They form a typed hierarc
     │   ├── GazeInvalidBlobVersionException (NonRetryable + RequiresFreshClean)
     │   ├── GazeBlobExpiredException     (NonRetryable + RequiresFreshClean)
     │   └── GazePipelineException        (Retryable)
-    └── GazeInfraException               (exit bucket 4 / 141 — infra/I-O error)
-        ├── GazeIoException              (RetryableWithAlert)
-        ├── GazeSigPipeException         (RetryableWithAlert)
-        ├── GazeTimeoutException         (RetryableWithAlert)
-        └── GazePolicyOpenException      (NonRetryable)
+    ├── GazeInfraException               (exit bucket 4 / 141 — infra/I-O error)
+    │   ├── GazeIoException              (RetryableWithAlert)
+    │   ├── GazeSigPipeException         (RetryableWithAlert)
+    │   ├── GazeTimeoutException         (RetryableWithAlert)
+    │   └── GazePolicyOpenException      (NonRetryable)
+    └── Install\NerInstallException      (NER model install failures, exitCode())
+        ├── NerDiskSpaceException        (exit 1 — not enough disk space at dest)
+        ├── NerLockHeldException         (exit 75 — concurrent gaze:install:ner)
+        ├── NerManifestInvalidException  (exit 2 — manifest or policy file invalid)
+        ├── NerPolicyConflictException   (exit 1 — [ner] block conflicts; use --force)
+        ├── NerShaMismatchException      (exit 1 — artifact sha256 mismatch)
+        ├── NerTransportException        (exit 1 — download/filesystem failure)
+        └── NerVariantUnknownException   (exit 2 — unknown NER variant name)
 ```
+
+The `Install\Ner*` family lives under the `CertaMesh\Gaze\Install` namespace. These exceptions are produced without a `gaze` subprocess (including during `composer install`, where no Laravel app exists), so their inherited `$stderrHash` is the SHA-256 of the empty string, `$variant` is always `null`, and `isCallerBug()` is always `false`. Their `exitCode(): int` method mirrors the inherited `$exitCode` property and is the suggested process exit code for `gaze:install:ner`. None of them implement a retry contract — they never flow through `GazeRetryPolicy`.
 
 ---
 

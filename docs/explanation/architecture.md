@@ -133,7 +133,7 @@ The audit DB path is resolved in priority order:
 
 ## 4. Exception Taxonomy
 
-All exceptions extend `GazeException extends \RuntimeException`.
+All exceptions extend `GazeException extends \RuntimeException` — including the `CertaMesh\Gaze\Install\Ner*Exception` family thrown by `gaze:install:ner` and the Composer plugin (via their `NerInstallException` base).
 
 | Category | Base class | Retry contract | Exit bucket | Members |
 |---|---|---|---|---|
