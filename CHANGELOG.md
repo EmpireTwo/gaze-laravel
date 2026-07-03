@@ -4,6 +4,22 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
 
 ## [Unreleased]
 
+### Added
+
+- `gaze:doctor` now flags a stale pinned binary (north-star P7, "doctor before
+  failure"). It parses the installed binary's `--version` and compares it against
+  `BinaryDownloader::PINNED_VERSION`; on a mismatch it adds a `pinned version`
+  detail row and warns with the exact fix, `php artisan gaze:install --force`. It
+  **warns, never fails** — the exit code is unchanged, matching the proxy /
+  daemon / restore-telemetry probes — and softens to an "expected" message
+  (dropping the `--force` hint) when the adopter has deliberately opted out of
+  the pin via `GAZE_BINARY` (a source-built binary) or `GAZE_VERSION` (a
+  self-pinned version). Net-new doctor probe → MINOR. Closes the
+  plugin-removal gap where a pin bump left the old binary in place with no signal
+  until a runtime feature went missing. The version-token parsing is now a shared
+  `BinaryDownloader::parseVersion()` so the install-skip decision and this probe
+  agree on what "the installed version" is.
+
 ### Removed (BREAKING)
 
 - The Composer plugin (`CertaMesh\Gaze\Install\GazeInstallerPlugin`) is removed
@@ -14,8 +30,9 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
   friction on first install. **Migration:** delete the now-inert
   `config.allow-plugins."certamesh/gaze-laravel"` key from your app's
   `composer.json` and run `php artisan gaze:install` after upgrading. Binary pin
-  bumps now require an explicit `gaze:install --force`; `gaze:doctor` reports the
-  installed version but does not fail on a stale pin. Adopters who want the old
+  bumps now require an explicit `gaze:install --force`; `gaze:doctor` now warns
+  (with a `gaze:install --force` hint) when the installed version lags the pin
+  but still does not fail on it. Adopters who want the old
   auto-download behaviour can wire `CertaMesh\Gaze\Install\BinaryInstaller::postInstall`
   into a Composer `post-update-cmd` script (honours `GAZE_SKIP_BINARY_DOWNLOAD`).
   `BinaryInstaller`, `BinaryDownloader`, and everything `gaze:install` uses are

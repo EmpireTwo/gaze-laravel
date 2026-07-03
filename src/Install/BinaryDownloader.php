@@ -166,15 +166,30 @@ class BinaryDownloader
             return false;
         }
 
-        $output = $process->getOutput();
-
         // Extract the version token (e.g. `gaze 0.11.3` → `0.11.3`), then
         // compare exactly. Pre-release/build suffixes are part of the token.
+        $reported = self::parseVersion($process->getOutput());
+
+        return $reported !== null && $reported === $version;
+    }
+
+    /**
+     * Extract the semver token from `gaze --version` output (e.g.
+     * `gaze 0.11.3` → `0.11.3`), or null when none is present. Pre-release and
+     * build suffixes are part of the token, so a `===` on the result is exact.
+     *
+     * Single source of truth shared with {@see alreadyInstalled} (install-skip
+     * decision) and the `gaze:doctor` pin-mismatch probe, so both agree on what
+     * "the installed version" is — a naive substring check would let `0.11.1`
+     * satisfy a pin of `0.11.10`.
+     */
+    public static function parseVersion(string $output): ?string
+    {
         if (preg_match('/\b(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?)\b/', $output, $m) !== 1) {
-            return false;
+            return null;
         }
 
-        return $m[1] === $version;
+        return $m[1];
     }
 
     public static function verifyChecksum(string $tarPath, string $sumsPath, string $asset): void
