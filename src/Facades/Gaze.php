@@ -31,6 +31,8 @@ use PHPUnit\Framework\Assert as PHPUnit;
  * @method static FakeGaze auditPurgeUsing(\Closure $handler)
  * @method static FakeGaze auditExportUsing(\Closure $handler)
  * @method static FakeGaze daemonCleanUsing(\Closure $handler)
+ * @method static FakeGaze withAuditRows(list<list<string>> $rows)
+ * @method static FakeGaze withSafetyNetRows(list<list<string>> $rows)
  *
  * @see GazeContract
  * @see \CertaMesh\Gaze\Gaze

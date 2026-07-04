@@ -157,6 +157,34 @@ final class FakeGaze implements GazeContract
         return $this;
     }
 
+    /**
+     * Seed the rows `audit()->query()->…->execute()` returns. Rows use the
+     * real builder's return shape — TSV positional lists, one inner list
+     * per audit row. Filters remain no-op recorders: seeded rows come back
+     * regardless of the filters a test applies.
+     *
+     * @param  list<list<string>>  $rows
+     */
+    public function withAuditRows(array $rows): static
+    {
+        $this->auditService->withQueryRows($rows);
+
+        return $this;
+    }
+
+    /**
+     * Seed the rows `audit()->safetyNetQuery()->…->execute()` returns.
+     * Same shape and no-op-filter semantics as `withAuditRows()`.
+     *
+     * @param  list<list<string>>  $rows
+     */
+    public function withSafetyNetRows(array $rows): static
+    {
+        $this->auditService->withSafetyNetRows($rows);
+
+        return $this;
+    }
+
     public function daemon(): FakeDaemonManager
     {
         return $this->daemonManager;

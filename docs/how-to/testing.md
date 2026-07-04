@@ -206,14 +206,32 @@ The positional-closure constructor from earlier releases keeps working — `Gaze
 
 ---
 
-## `FakeQueryBuilder`
+## `FakeQueryBuilder` and Seeded Rows
 
-`FakeAuditService::query()` returns a `FakeQueryBuilder`. The fake query builder is a no-op builder — it does not execute any process. Use it when testing code that calls `Gaze::audit()->query()` and you need to assert that the query path was reached, or when you want to stub a result.
+`FakeAuditService::query()` returns a `FakeQueryBuilder`. The fake query builder does not execute any process — filter methods are fluent no-op recorders (exposed via `appliedFilters()`), and `execute()` returns whatever rows were seeded on the fake (empty by default).
+
+Seed rows with `withAuditRows()`. Rows use the real builder's return shape: TSV positional lists (`list<list<string>>`), one inner list per audit row:
 
 ```php
-// FakeQueryBuilder is returned automatically from Gaze::fake()
-$fake = Gaze::fake();
-$fake->audit()->query()->execute(); // no-op, returns []
+Gaze::fake()->withAuditRows([
+    ['2026-01-01T00:00:00Z', 'email', 'tokenize', 'sess-1'],
+    ['2026-01-02T00:00:00Z', 'name', 'tokenize', 'sess-2'],
+]);
+
+$rows = Gaze::audit()->query()->whereClass('email')->execute();
+// => both seeded rows — filters are recorded, not applied
+```
+
+Because filters stay no-ops, seeded rows come back regardless of the filters the code under test applies; assert the filters themselves via `appliedFilters()` when the *query construction* is what you are testing.
+
+`withSafetyNetRows()` seeds `audit()->safetyNetQuery()` the same way:
+
+```php
+Gaze::fake()->withSafetyNetRows([
+    ['2026-01-03T00:00:00Z', 'fresh', 'EMAIL', 'email', 'body.text'],
+]);
+
+$rows = Gaze::audit()->safetyNetQuery()->whereLeakKind('fresh')->execute();
 ```
 
 ---

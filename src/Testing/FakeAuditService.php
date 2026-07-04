@@ -24,6 +24,12 @@ final class FakeAuditService implements AuditServiceContract
     /** @var list<array{filters: array<string, string>}> */
     private array $safetyNetQueryCalls = [];
 
+    /** @var list<list<string>> */
+    private array $queryRows = [];
+
+    /** @var list<list<string>> */
+    private array $safetyNetRows = [];
+
     /**
      * @param  \Closure(string, bool): AuditPurgeResult|null  $purgeHandler
      * @param  \Closure(string|null, string): AuditExportResult|null  $exportHandler
@@ -59,6 +65,34 @@ final class FakeAuditService implements AuditServiceContract
         return $this;
     }
 
+    /**
+     * Seed the rows every `query()` builder returns from `execute()`.
+     * Rows use the real builder's return shape — TSV positional lists,
+     * one inner list per audit row. Usually configured via
+     * `Gaze::fake()->withAuditRows()`.
+     *
+     * @param  list<list<string>>  $rows
+     */
+    public function withQueryRows(array $rows): static
+    {
+        $this->queryRows = $rows;
+
+        return $this;
+    }
+
+    /**
+     * Seed the rows every `safetyNetQuery()` builder returns from
+     * `execute()`. Usually configured via `Gaze::fake()->withSafetyNetRows()`.
+     *
+     * @param  list<list<string>>  $rows
+     */
+    public function withSafetyNetRows(array $rows): static
+    {
+        $this->safetyNetRows = $rows;
+
+        return $this;
+    }
+
     public function purge(): FakePurgeBuilder
     {
         return new FakePurgeBuilder($this);
@@ -66,12 +100,12 @@ final class FakeAuditService implements AuditServiceContract
 
     public function query(): FakeQueryBuilder
     {
-        return new FakeQueryBuilder(audit: $this);
+        return new FakeQueryBuilder(rows: $this->queryRows, audit: $this);
     }
 
     public function safetyNetQuery(): FakeSafetyNetQueryBuilder
     {
-        return new FakeSafetyNetQueryBuilder(audit: $this);
+        return new FakeSafetyNetQueryBuilder(rows: $this->safetyNetRows, audit: $this);
     }
 
     public function recordPurgeCall(string $before, bool $dryRun): AuditPurgeResult
