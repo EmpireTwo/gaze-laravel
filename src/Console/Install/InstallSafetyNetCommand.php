@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CertaMesh\Gaze\Console\Install;
 
+use CertaMesh\Gaze\Console\Concerns\BuildsBinaryArgv;
 use CertaMesh\Gaze\Install\KijiArtifacts;
 use CertaMesh\Gaze\Install\SafetyNetConfigurator;
 use CertaMesh\Gaze\Install\SafetyNetConfiguratorResult;
@@ -22,6 +23,8 @@ use Illuminate\Console\Command;
  */
 final class InstallSafetyNetCommand extends Command
 {
+    use BuildsBinaryArgv;
+
     protected $signature = 'gaze:install:safety-net
         {--safety-net= : Backend to wire non-interactively: opf|kiji}
         {--kiji-model-dir= : Pinned Kiji DistilBERT model directory (kiji backend only)}
@@ -160,13 +163,6 @@ final class InstallSafetyNetCommand extends Command
         );
 
         return false;
-    }
-
-    private function stringOption(string $name): ?string
-    {
-        $value = $this->option($name);
-
-        return is_string($value) && $value !== '' ? $value : null;
     }
 
     /**
