@@ -40,15 +40,22 @@ use CertaMesh\Gaze\Install\SafetyNetConfigurator;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Contracts\Encryption\StringEncrypter;
 use Illuminate\Contracts\Foundation\Application;
-use Illuminate\Contracts\Support\DeferrableProvider;
 use Illuminate\Encryption\Encrypter;
+use Illuminate\Foundation\Console\AboutCommand;
 use Illuminate\Process\Factory as ProcessFactory;
 use Illuminate\Support\ServiceProvider;
 use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Component\HttpClient\RetryableHttpClient;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
-class GazeServiceProvider extends ServiceProvider implements DeferrableProvider
+/**
+ * Deliberately NOT a DeferrableProvider: every binding here is a cheap
+ * closure (nothing is constructed until first resolution anyway), and
+ * deferral caused the known gotcha where `config('gaze.*')` read as null
+ * during HTTP requests that never resolved a gaze service — the package
+ * config was only merged once a deferred binding was touched.
+ */
+class GazeServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
@@ -278,6 +285,28 @@ class GazeServiceProvider extends ServiceProvider implements DeferrableProvider
 
     public function boot(): void
     {
+        if (class_exists(AboutCommand::class)) {
+            // Lazy closure — only evaluated when `artisan about` actually
+            // runs. Reports the pinned version rather than spawning
+            // `gaze --version`: there is no cached installed-version value,
+            // and `about` must stay cheap (gaze:doctor probes the real
+            // binary and flags pin mismatches).
+            AboutCommand::add('Gaze', function (): array {
+                /** @var ConfigRepository $config */
+                $config = $this->app->make('config');
+                $policyPath = $config->get('gaze.policy_path');
+
+                return [
+                    'Binary' => $this->app->make(BinaryResolver::class)->resolveOrNull() ?? '<not installed>',
+                    'Binary Pin' => BinaryDownloader::PINNED_VERSION,
+                    'Policy Path' => is_string($policyPath) && $policyPath !== ''
+                        ? $policyPath
+                        : $this->app->basePath('policy.toml'),
+                    'Safety Net' => $config->get('gaze.safety_net') ? 'ON' : 'OFF',
+                ];
+            });
+        }
+
         if ($this->app->runningInConsole()) {
             $this->publishes([
                 __DIR__.'/../config/gaze.php' => $this->app->configPath('gaze.php'),
@@ -306,31 +335,5 @@ class GazeServiceProvider extends ServiceProvider implements DeferrableProvider
                 DaemonStatusCommand::class,
             ]);
         }
-    }
-
-    /**
-     * @return list<class-string|string>
-     */
-    public function provides(): array
-    {
-        return [
-            BinaryDownloader::class,
-            BinaryResolver::class,
-            Gaze::class,
-            GazeContract::class,
-            AuditService::class,
-            AuditServiceContract::class,
-            DaemonClientContract::class,
-            DaemonManager::class,
-            DaemonManagerContract::class,
-            'gaze.http_client',
-            LaravelNerFetcher::class,
-            NerFetcher::class,
-            NerManifest::class,
-            NerInstaller::class,
-            PolicyTomlPatcher::class,
-            SafetyNetConfigurator::class,
-            'gaze.encrypter',
-        ];
     }
 }

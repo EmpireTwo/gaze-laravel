@@ -10,6 +10,7 @@ use CertaMesh\Gaze\Install\LaravelNerFetcher;
 use CertaMesh\Gaze\Install\NerFetcher;
 use CertaMesh\Gaze\Install\NerInstaller;
 use CertaMesh\Gaze\Install\NerManifest;
+use Illuminate\Contracts\Support\DeferrableProvider;
 use Symfony\Component\HttpClient\RetryableHttpClient;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
@@ -79,15 +80,34 @@ it('fails loudly on an invalid dedicated key', function () {
 })->throws(RuntimeException::class, 'base64-encoded 32 bytes');
 
 it('does not bind the generic Symfony HttpClientInterface app-wide', function () {
-    // Regression: binding the generic interface from a DeferrableProvider
-    // hijacks host-app/third-party resolutions and collides in the
-    // deferred-services map when two packages do the same.
-    expect($this->app->bound(HttpClientInterface::class))->toBeFalse();
+    // Regression: binding the generic interface hijacks host-app/third-party
+    // resolutions when two packages do the same. Only the package-scoped
+    // `gaze.http_client` key may be bound.
+    expect($this->app->bound(HttpClientInterface::class))->toBeFalse()
+        ->and($this->app->bound('gaze.http_client'))->toBeTrue();
+});
 
-    $provider = new GazeServiceProvider($this->app);
-    expect($provider->provides())
-        ->not->toContain(HttpClientInterface::class)
-        ->toContain('gaze.http_client');
+it('is not a deferrable provider', function () {
+    // Deferral caused the known gotcha where `config('gaze.*')` read as null
+    // during HTTP requests that never resolved a gaze service (the package
+    // config is only merged when register() runs). The bindings are cheap
+    // closures, so eager registration costs nothing.
+    expect(new GazeServiceProvider($this->app))
+        ->not->toBeInstanceOf(DeferrableProvider::class);
+});
+
+it('merges package config on every request without touching a gaze binding', function () {
+    // The concrete symptom the non-deferred posture fixes: gaze config must
+    // be readable before (or without) any gaze service being resolved.
+    expect($this->app->resolved(CertaMesh\Gaze\Contracts\Gaze::class))->toBeFalse()
+        ->and(config('gaze.timeout_seconds'))->not->toBeNull()
+        ->and(config('gaze.policy_path'))->not->toBeNull();
+});
+
+it('registers a Gaze section in artisan about', function () {
+    $this->artisan('about')
+        ->assertExitCode(0)
+        ->expectsOutputToContain('Gaze');
 });
 
 it('resolves gaze.http_client as a retrying singleton', function () {

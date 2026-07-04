@@ -20,6 +20,15 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
   receives is byte-for-byte identical (contract-pinned by the argv tests).
   Pre-1.0, so this lands on a MINOR bump.
 
+- **`GazeServiceProvider` is no longer a `DeferrableProvider`** and its
+  `provides()` method is gone. The bindings are cheap closures (nothing is
+  constructed until first resolution), so deferral bought nothing — and it
+  caused the known gotcha where `config('gaze.*')` read as `null` in HTTP
+  requests that never resolved a gaze service, because the package config was
+  only merged once a deferred binding was touched. Registration now always
+  runs. **Migration:** none for normal apps; if you called
+  `$provider->provides()` directly (unlikely), drop the call.
+
 ### Changed
 
 - The shipped `config/gaze.php` groups the ~14 flat safety-net / OPF / Kiji
@@ -47,6 +56,13 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
   earlier package versions still unserialize (legacy property-shape fallback).
 
 ### Added
+
+- `php artisan about` now carries a `Gaze` section: resolved binary path (or
+  `<not installed>`), the package's binary pin, the policy path, and the
+  safety-net switch. The section is a lazy closure — nothing is evaluated
+  unless `about` actually runs, and it deliberately reports the *pinned*
+  version instead of spawning `gaze --version` (doctor owns the real-binary
+  probe). Guarded by `class_exists(AboutCommand::class)`.
 
 - `gaze:doctor` now flags a stale pinned binary (north-star P7, "doctor before
   failure"). It parses the installed binary's `--version` and compares it against
