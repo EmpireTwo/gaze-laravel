@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace CertaMesh\Gaze\Console\Proxy;
 
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
-use Illuminate\Process\Factory as ProcessFactory;
 
 final class ProxyStatusCommand extends ProxyCommand
 {
@@ -28,26 +27,8 @@ final class ProxyStatusCommand extends ProxyCommand
      * running (...)` or `gaze-proxy not running`. We translate the latter to
      * a non-zero exit so CI / Sentry can probe the daemon directly.
      */
-    protected function runProcess(array $argv, ConfigRepository $config, ProcessFactory $process): int
+    protected function successExitCode(string $stdout): int
     {
-        $timeout = (int) $config->get('gaze.timeout_seconds', 30);
-
-        $result = $process->newPendingProcess()->timeout($timeout)->run($argv);
-
-        $stdout = rtrim($result->output());
-        if ($stdout !== '') {
-            $this->line($stdout);
-        }
-
-        if (! $result->successful()) {
-            $stderr = rtrim($result->errorOutput());
-            if ($stderr !== '') {
-                $this->error($stderr);
-            }
-
-            return $result->exitCode() ?? self::FAILURE;
-        }
-
         return str_contains($stdout, 'not running') ? self::FAILURE : self::SUCCESS;
     }
 }
