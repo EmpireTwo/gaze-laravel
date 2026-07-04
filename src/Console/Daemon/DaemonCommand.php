@@ -51,34 +51,10 @@ abstract class DaemonCommand extends Command
         return $argv;
     }
 
-    /**
-     * @param  list<string>  $argv
-     */
-    protected function appendFlag(array &$argv, string $name, ?string $value): void
-    {
-        if ($value !== null && $value !== '') {
-            $argv[] = "--{$name}={$value}";
-        }
-    }
-
     protected function stringOption(string $name): ?string
     {
         $value = $this->option($name);
 
         return is_string($value) && $value !== '' ? $value : null;
-    }
-
-    protected function configString(ConfigRepository $config, string $key): ?string
-    {
-        $value = $config->get($key);
-
-        return is_string($value) && $value !== '' ? $value : null;
-    }
-
-    protected function configNumericString(ConfigRepository $config, string $key): ?string
-    {
-        $value = $config->get($key);
-
-        return is_numeric($value) ? (string) $value : null;
     }
 }
