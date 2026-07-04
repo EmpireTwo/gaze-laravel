@@ -11,6 +11,8 @@ use CertaMesh\Gaze\Gaze;
 use CertaMesh\Gaze\GazeOptions;
 use CertaMesh\Gaze\GazeServiceProvider;
 use CertaMesh\Gaze\GazeSession;
+use Illuminate\Contracts\Encryption\Encrypter;
+use Illuminate\Contracts\Encryption\StringEncrypter;
 use Illuminate\Foundation\Application;
 use Illuminate\Process\Factory as ProcessFactory;
 use Orchestra\Testbench\TestCase as OrchestraTestCase;
@@ -62,6 +64,9 @@ abstract class TestCase extends OrchestraTestCase
     ): Gaze {
         $app = $this->applicationInstance();
 
+        /** @var Encrypter&StringEncrypter $encrypter */
+        $encrypter = $app->make('gaze.encrypter');
+
         return new Gaze(
             resolver: new BinaryResolver(
                 explicitPath: $explicitPath,
@@ -97,6 +102,7 @@ abstract class TestCase extends OrchestraTestCase
                 restoreTelemetry: $restoreTelemetry,
                 nerThreshold: $nerThreshold,
             ),
+            encrypter: $encrypter,
         );
     }
 

@@ -38,6 +38,7 @@ use CertaMesh\Gaze\Install\NerManifest;
 use CertaMesh\Gaze\Install\PolicyTomlPatcher;
 use CertaMesh\Gaze\Install\SafetyNetConfigurator;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
+use Illuminate\Contracts\Encryption\StringEncrypter;
 use Illuminate\Contracts\Foundation\Application;
 use Illuminate\Contracts\Support\DeferrableProvider;
 use Illuminate\Encryption\Encrypter;
@@ -78,6 +79,9 @@ class GazeServiceProvider extends ServiceProvider implements DeferrableProvider
             $gazeConfig = (array) $config->get('gaze', []);
             $policyPath = $gazeConfig['policy_path'] ?? null;
 
+            /** @var \Illuminate\Contracts\Encryption\Encrypter&StringEncrypter $encrypter */
+            $encrypter = $app->make('gaze.encrypter');
+
             return new Gaze(
                 resolver: $app->make(BinaryResolver::class),
                 process: $app->make(ProcessFactory::class),
@@ -86,6 +90,7 @@ class GazeServiceProvider extends ServiceProvider implements DeferrableProvider
                     ? $policyPath
                     : $app->basePath('policy.toml'),
                 options: GazeOptions::fromConfig($gazeConfig),
+                encrypter: $encrypter,
             );
         });
 

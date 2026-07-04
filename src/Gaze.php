@@ -33,6 +33,8 @@ use CertaMesh\Gaze\Exceptions\GazeUnknownTokenException;
 use CertaMesh\Gaze\Exceptions\GazeUnsupportedSessionScopeException;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Encryption\DecryptException;
+use Illuminate\Contracts\Encryption\Encrypter as EncrypterContract;
+use Illuminate\Contracts\Encryption\StringEncrypter;
 use Illuminate\Contracts\Process\ProcessResult;
 use Illuminate\Process\Exceptions\ProcessTimedOutException;
 use Illuminate\Process\Factory as ProcessFactory;
@@ -62,6 +64,10 @@ class Gaze implements AuditRunner, GazeContract
         private readonly Container $container,
         private readonly ?string $policyPath = null,
         private readonly GazeOptions $options = new GazeOptions,
+        // Session-blob encrypter (the `gaze.encrypter` binding). Injected so
+        // EncryptedBlob::wrap never service-locates on the hot clean() path;
+        // null falls back to lazy container resolution inside the blob.
+        private readonly (EncrypterContract&StringEncrypter)|null $encrypter = null,
     ) {
         $this->timeoutSeconds = $options->timeoutSeconds;
         $this->maxBytes = $options->maxBytes;
@@ -119,7 +125,7 @@ class Gaze implements AuditRunner, GazeContract
 
         return new GazeSession(
             cleanText: $decoded['clean_text'],
-            ciphertext: EncryptedBlob::wrap($decoded['session_blob']),
+            ciphertext: EncryptedBlob::wrap($decoded['session_blob'], $this->encrypter),
             detections: (int) ($decoded['stats']['detections'] ?? 0),
             entries: $this->mapEntries($decoded['entries'] ?? null),
             leakReport: $this->mapLeakReport($decoded['leak_report'] ?? null),

@@ -35,6 +35,17 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
   file no longer carries inline casts — coercion lives solely in
   `GazeOptions::fromConfig()`. See UPGRADING.md for the full key map.
 
+- `EncryptedBlob` no longer service-locates `app('gaze.encrypter')` on the hot
+  path: `Gaze` now receives the `gaze.encrypter` binding via its constructor
+  and passes it to `EncryptedBlob::wrap()`, which accepts an optional encrypter
+  parameter (omitting it keeps the container fallback for fakes and fixtures,
+  so `wrap($blob)` call sites are unaffected). `fromCiphertext()` stays pure.
+  The blob also gains explicit `__serialize`/`__unserialize`: only the
+  ciphertext crosses serialization — the encrypter reference is dropped so
+  queue payloads never embed the raw encryption key — and decryption after a
+  round-trip lazily re-resolves the bound encrypter. Payloads serialized by
+  earlier package versions still unserialize (legacy property-shape fallback).
+
 ### Added
 
 - `gaze:doctor` now flags a stale pinned binary (north-star P7, "doctor before
