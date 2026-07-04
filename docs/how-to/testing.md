@@ -129,50 +129,80 @@ Gaze::assertNothingAudited();
 
 ---
 
-## Custom Handlers
+## Fluent Configuration
 
-Pass closures to stub return values or simulate error conditions.
-
-### `cleanHandler`
-
-Override the return value of every `clean()` call:
+`Gaze::fake()` returns the `FakeGaze` instance, and every configuration method returns it again — so behaviour is scripted by chaining, mirroring `Http::fake()`-style fluency:
 
 ```php
 use CertaMesh\Gaze\EncryptedBlob;
 use CertaMesh\Gaze\GazeSession;
 
-Gaze::fake(
-    cleanHandler: fn (string $text): GazeSession => new GazeSession(
+Gaze::fake()
+    ->cleanUsing(fn (string $text, ?float $threshold): GazeSession => new GazeSession(
         cleanText: str_replace('alice@example.invalid', '<Email_1>', $text),
         ciphertext: EncryptedBlob::wrap(base64_encode(json_encode(['text' => $text]))),
         detections: 1,
-    ),
-);
+    ))
+    ->restoreUsing(fn (GazeSession $session, string $text): string
+        => str_replace('<Email_1>', 'alice@example.invalid', $text));
 ```
 
-### `restoreHandler`
+### `cleanUsing(Closure $handler)`
 
-Override the return value of every `restore()` call:
+Script the return value of every `clean()` call. The handler receives `(string $text, ?float $threshold)` — exactly the arguments the real `Gaze::clean()` takes, so it can branch on the per-call threshold. A single-parameter closure `fn (string $text)` also works; PHP closures ignore surplus arguments.
+
+### `maskUsing(Closure $handler)`
+
+Script the return value of every `mask()` call. The handler receives `(string $text, ?callable $replace)` and owns the whole result — `mask()` no longer re-enters `clean()` when a mask handler is set:
 
 ```php
-Gaze::fake(
-    restoreHandler: fn (GazeSession $session, string $text): string
-        => str_replace('<Email_1>', 'alice@example.invalid', $text),
-);
+Gaze::fake()->maskUsing(fn (string $text): string => '[REDACTED]');
 ```
 
-### `auditPurgeHandler`
+### `restoreUsing(Closure $handler)`
 
-Override the return value of every `audit()->purge()->...->execute()` or `->dryRun()` call:
+Script the return value of every `restore()` call. The handler receives `(GazeSession $session, string $text)`.
+
+### `failWith(GazeException $exception)`
+
+Simulate a broken binary. Every redaction verb — `clean()`, `mask()`, `restore()`, and `daemon()->clean()` — throws the given exception *after* recording the call, so failure-path tests can still assert the service was reached:
+
+```php
+use CertaMesh\Gaze\Exceptions\GazeException;
+
+Gaze::fake()->failWith(new GazeException('gaze exited 70', exitCode: 70, stderrHash: 'deadbeef'));
+
+$this->post('/api/prompt', ['text' => 'hi'])->assertStatus(503);
+
+Gaze::assertCleaned(); // the attempt was still recorded
+```
+
+`failWith` takes precedence over any scripted handler. Audit verbs are unaffected — script those with a throwing closure via `auditPurgeUsing()` / `auditExportUsing()` if needed.
+
+### `auditPurgeUsing(Closure $handler)`
+
+Script the result of every `audit()->purge()->...->execute()` or `->dryRun()` call. The handler receives `(string $beforeIso, bool $dryRun)`:
 
 ```php
 use CertaMesh\Gaze\Audit\AuditPurgeResult;
 
-Gaze::fake(
-    auditPurgeHandler: fn (string $beforeIso, bool $dryRun): AuditPurgeResult
-        => new AuditPurgeResult(rawOutput: '', count: $dryRun ? 42 : 42),
+Gaze::fake()->auditPurgeUsing(
+    fn (string $beforeIso, bool $dryRun): AuditPurgeResult
+        => new AuditPurgeResult(rawOutput: '', count: 42),
 );
 ```
+
+### `auditExportUsing(Closure $handler)`
+
+Script the result of every `audit()->query()->...->export()` call. The handler receives `(?string $output, string $format)`.
+
+### `daemonCleanUsing(Closure $handler)`
+
+Script the response of every `daemon()->clean()` call. The handler receives `(string $sessionId, string $text)` and returns a `CleanResponse`.
+
+### Constructor closures
+
+The positional-closure constructor from earlier releases keeps working — `Gaze::fake(cleanHandler: ..., restoreHandler: ..., auditPurgeHandler: ..., daemonCleanHandler: ..., auditExportHandler: ...)` seeds the same handlers the fluent methods set. A later fluent call replaces the constructor-seeded handler.
 
 ---
 

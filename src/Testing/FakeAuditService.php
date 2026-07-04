@@ -29,9 +29,35 @@ final class FakeAuditService implements AuditServiceContract
      * @param  \Closure(string|null, string): AuditExportResult|null  $exportHandler
      */
     public function __construct(
-        private readonly ?\Closure $purgeHandler = null,
-        private readonly ?\Closure $exportHandler = null,
+        private ?\Closure $purgeHandler = null,
+        private ?\Closure $exportHandler = null,
     ) {}
+
+    /**
+     * Script the result of every purge execution. Usually configured via
+     * `Gaze::fake()->auditPurgeUsing()`.
+     *
+     * @param  \Closure(string, bool): AuditPurgeResult  $handler
+     */
+    public function purgeUsing(\Closure $handler): static
+    {
+        $this->purgeHandler = $handler;
+
+        return $this;
+    }
+
+    /**
+     * Script the result of every export call. Usually configured via
+     * `Gaze::fake()->auditExportUsing()`.
+     *
+     * @param  \Closure(string|null, string): AuditExportResult  $handler
+     */
+    public function exportUsing(\Closure $handler): static
+    {
+        $this->exportHandler = $handler;
+
+        return $this;
+    }
 
     public function purge(): FakePurgeBuilder
     {

@@ -10,6 +10,7 @@ use CertaMesh\Gaze\Contracts\Gaze as GazeContract;
 use CertaMesh\Gaze\Daemon\CleanResponse;
 use CertaMesh\Gaze\EncryptedBlob;
 use CertaMesh\Gaze\Entry;
+use CertaMesh\Gaze\Exceptions\GazeException;
 use CertaMesh\Gaze\GazeSession;
 
 /**
@@ -17,6 +18,17 @@ use CertaMesh\Gaze\GazeSession;
  * (it does NOT extend the concrete, process-invoking `CertaMesh\Gaze\Gaze`)
  * so its surface is exactly the public contract — no inherited internals
  * that would fatal on an uninitialized constructor state.
+ *
+ * Configure behaviour fluently off `Gaze::fake()` (each method returns the
+ * fake, so calls chain):
+ *
+ *     Gaze::fake()
+ *         ->cleanUsing(fn (string $text, ?float $threshold) => ...)
+ *         ->restoreUsing(fn (GazeSession $session, string $text) => ...)
+ *         ->failWith(new GazeException('boom', exitCode: 70, stderrHash: 'x'));
+ *
+ * The positional-closure constructor remains supported; a fluent call
+ * simply replaces the corresponding handler.
  */
 final class FakeGaze implements GazeContract
 {
@@ -28,6 +40,10 @@ final class FakeGaze implements GazeContract
 
     /** @var list<array{text: string, clean_text: string}> */
     private array $restoreCalls = [];
+
+    private ?\Closure $maskHandler = null;
+
+    private ?GazeException $failure = null;
 
     private readonly FakeAuditService $auditService;
 
@@ -41,14 +57,104 @@ final class FakeGaze implements GazeContract
      * @param  \Closure(string|null, string): AuditExportResult|null  $auditExportHandler
      */
     public function __construct(
-        private readonly ?\Closure $cleanHandler = null,
-        private readonly ?\Closure $restoreHandler = null,
+        private ?\Closure $cleanHandler = null,
+        private ?\Closure $restoreHandler = null,
         ?\Closure $auditPurgeHandler = null,
         ?\Closure $daemonCleanHandler = null,
         ?\Closure $auditExportHandler = null,
     ) {
         $this->auditService = new FakeAuditService($auditPurgeHandler, $auditExportHandler);
         $this->daemonManager = new FakeDaemonManager($daemonCleanHandler);
+    }
+
+    /**
+     * Script the return value of every `clean()` call.
+     *
+     * @param  \Closure(string, ?float): GazeSession  $handler
+     */
+    public function cleanUsing(\Closure $handler): static
+    {
+        $this->cleanHandler = $handler;
+
+        return $this;
+    }
+
+    /**
+     * Script the return value of every `mask()` call. When set, `mask()`
+     * no longer re-enters `clean()` — the handler owns the whole result.
+     *
+     * @param  \Closure(string, ?callable): string  $handler
+     */
+    public function maskUsing(\Closure $handler): static
+    {
+        $this->maskHandler = $handler;
+
+        return $this;
+    }
+
+    /**
+     * Script the return value of every `restore()` call.
+     *
+     * @param  \Closure(GazeSession, string): string  $handler
+     */
+    public function restoreUsing(\Closure $handler): static
+    {
+        $this->restoreHandler = $handler;
+
+        return $this;
+    }
+
+    /**
+     * Simulate a broken binary: every redaction verb — `clean()`, `mask()`,
+     * `restore()`, and `daemon()->clean()` — throws the given exception
+     * after recording the call, so failure-path tests can still assert the
+     * service was reached. Takes precedence over any scripted handler.
+     * Audit verbs are unaffected; script those via `auditPurgeUsing()` /
+     * `auditExportUsing()` with a throwing closure if needed.
+     */
+    public function failWith(GazeException $exception): static
+    {
+        $this->failure = $exception;
+        $this->daemonManager->failWith($exception);
+
+        return $this;
+    }
+
+    /**
+     * Script the result of every `audit()->purge()->…->execute()` or
+     * `->dryRun()` call.
+     *
+     * @param  \Closure(string, bool): AuditPurgeResult  $handler
+     */
+    public function auditPurgeUsing(\Closure $handler): static
+    {
+        $this->auditService->purgeUsing($handler);
+
+        return $this;
+    }
+
+    /**
+     * Script the result of every `audit()->query()->…->export()` call.
+     *
+     * @param  \Closure(string|null, string): AuditExportResult  $handler
+     */
+    public function auditExportUsing(\Closure $handler): static
+    {
+        $this->auditService->exportUsing($handler);
+
+        return $this;
+    }
+
+    /**
+     * Script the response of every `daemon()->clean()` call.
+     *
+     * @param  \Closure(string, string): CleanResponse  $handler
+     */
+    public function daemonCleanUsing(\Closure $handler): static
+    {
+        $this->daemonManager->cleanUsing($handler);
+
+        return $this;
     }
 
     public function daemon(): FakeDaemonManager
@@ -59,6 +165,10 @@ final class FakeGaze implements GazeContract
     public function clean(string $text, ?float $threshold = null): GazeSession
     {
         $this->cleanCalls[] = ['text' => $text, 'threshold' => $threshold];
+
+        if ($this->failure !== null) {
+            throw $this->failure;
+        }
 
         if ($this->cleanHandler !== null) {
             // Always invoked with both arguments. PHP user-land closures
@@ -89,6 +199,14 @@ final class FakeGaze implements GazeContract
     {
         $this->maskCalls[] = ['text' => $text];
 
+        if ($this->failure !== null) {
+            throw $this->failure;
+        }
+
+        if ($this->maskHandler !== null) {
+            return ($this->maskHandler)($text, $replace);
+        }
+
         $session = $this->clean($text);
 
         $masked = $session->cleanText;
@@ -103,6 +221,10 @@ final class FakeGaze implements GazeContract
     public function restore(GazeSession $session, string $text): string
     {
         $this->restoreCalls[] = ['text' => $text, 'clean_text' => $session->cleanText];
+
+        if ($this->failure !== null) {
+            throw $this->failure;
+        }
 
         if ($this->restoreHandler !== null) {
             return ($this->restoreHandler)($session, $text);

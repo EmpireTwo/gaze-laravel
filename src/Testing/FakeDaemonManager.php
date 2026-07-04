@@ -7,6 +7,7 @@ namespace CertaMesh\Gaze\Testing;
 use CertaMesh\Gaze\Contracts\DaemonManager as DaemonManagerContract;
 use CertaMesh\Gaze\Daemon\CleanResponse;
 use CertaMesh\Gaze\Daemon\Contracts\DaemonClientContract;
+use CertaMesh\Gaze\Exceptions\GazeException;
 
 /**
  * Test double for the `Gaze::daemon()` chain. Records every call and
@@ -30,9 +31,36 @@ final class FakeDaemonManager implements DaemonManagerContract
     /** @var array<string, FakeDaemonSession> */
     private array $sessionDoubles = [];
 
+    private ?GazeException $failure = null;
+
     public function __construct(
-        private readonly ?\Closure $cleanHandler = null,
+        private ?\Closure $cleanHandler = null,
     ) {}
+
+    /**
+     * Script the response of every `clean()` call. Usually configured via
+     * `Gaze::fake()->daemonCleanUsing()`.
+     *
+     * @param  \Closure(string, string): CleanResponse  $handler
+     */
+    public function cleanUsing(\Closure $handler): static
+    {
+        $this->cleanHandler = $handler;
+
+        return $this;
+    }
+
+    /**
+     * Make every `clean()` call throw after recording it. Usually
+     * configured via `Gaze::fake()->failWith()`, which fans the failure
+     * out to the one-shot verbs and this daemon path together.
+     */
+    public function failWith(GazeException $exception): static
+    {
+        $this->failure = $exception;
+
+        return $this;
+    }
 
     public function session(string $id): FakeDaemonSession
     {
@@ -46,6 +74,10 @@ final class FakeDaemonManager implements DaemonManagerContract
     public function clean(string $sessionId, string $text): CleanResponse
     {
         $this->calls[] = ['session_id' => $sessionId, 'text' => $text];
+
+        if ($this->failure !== null) {
+            throw $this->failure;
+        }
 
         if ($this->cleanHandler !== null) {
             return ($this->cleanHandler)($sessionId, $text);
