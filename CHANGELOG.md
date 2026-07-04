@@ -4,6 +4,22 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
 
 ## [Unreleased]
 
+### Changed (BREAKING)
+
+- **`Gaze::__construct` now takes a `GazeOptions` value object.** The 29-scalar
+  constructor is gone; the signature is now
+  `new Gaze(BinaryResolver $resolver, ProcessFactory $process, Container $container, ?string $policyPath = null, GazeOptions $options = new GazeOptions)`.
+  Every CLI tuning knob (`maxBytes`, `locale`, the safety-net / OPF / Kiji
+  family, `restoreMode`, `nerThreshold`, …) moved onto the new readonly
+  `CertaMesh\Gaze\GazeOptions` DTO, and `GazeOptions::fromConfig(config('gaze'))`
+  is the single config-array → typed-value coercion layer (previously duplicated
+  between the provider binding closure and inline casts in the config file).
+  This only affects code constructing `Gaze` manually — resolving via the
+  container, the facade, or `Contracts\Gaze` is unchanged, and the
+  `Contracts\Gaze` public API is untouched. The `clean` argv order the binary
+  receives is byte-for-byte identical (contract-pinned by the argv tests).
+  Pre-1.0, so this lands on a MINOR bump.
+
 ### Added
 
 - `gaze:doctor` now flags a stale pinned binary (north-star P7, "doctor before

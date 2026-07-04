@@ -42,45 +42,37 @@ class Gaze implements AuditRunner, GazeContract
 {
     private const DEFAULT_MAX_BYTES = 10485760;
 
+    // Mirrors of the GazeOptions fields consumed by restore(), run(), and
+    // the pre-flight helpers in the lower half of this file. clean()/mask()
+    // read $this->options directly; these keep the process-invocation and
+    // error paths on stable `$this->x` property reads.
+    private readonly int $timeoutSeconds;
+
+    private readonly ?int $maxBytes;
+
+    private readonly ?string $auditDbPath;
+
+    private readonly ?string $restoreMode;
+
+    private readonly bool $restoreTelemetry;
+
     public function __construct(
         private readonly BinaryResolver $resolver,
         private readonly ProcessFactory $process,
-        private readonly int $timeoutSeconds,
         private readonly Container $container,
         private readonly ?string $policyPath = null,
-        private readonly ?int $maxBytes = null,
-        private readonly ?int $sessionTtlSeconds = null,
-        private readonly ?string $auditDbPath = null,
-        private readonly ?string $locale = null,
-        /** @var list<string>|null */
-        private readonly ?array $rulepacks = null,
-        /** @var list<string>|null */
-        private readonly ?array $rulepackPaths = null,
-        private readonly bool $safetyNet = false,
-        private readonly ?string $safetyNetDevice = null,
-        private readonly ?string $openaiFilterCommand = null,
-        private readonly ?string $openaiFilterCheckpoint = null,
-        private readonly ?string $openaiFilterOperatingPoint = null,
-        private readonly ?int $safetyNetTimeoutMs = null,
-        private readonly ?int $safetyNetInputLimitBytes = null,
-        private readonly ?string $safetyNetMode = null,
-        private readonly ?string $safetyNetBackend = null,
-        private readonly ?string $kijiBackend = null,
-        private readonly ?string $kijiDistilbertPrecision = null,
-        private readonly ?string $kijiDistilbertCommand = null,
-        private readonly ?string $kijiDistilbertModelDir = null,
-        private readonly ?string $safetyNetFallback = null,
-        private readonly ?string $sessionScope = null,
-        private readonly ?string $restoreMode = null,
-        private readonly bool $restoreTelemetry = false,
-        private readonly ?float $nerThreshold = null,
-    ) {}
+        private readonly GazeOptions $options = new GazeOptions,
+    ) {
+        $this->timeoutSeconds = $options->timeoutSeconds;
+        $this->maxBytes = $options->maxBytes;
+        $this->auditDbPath = $options->auditDbPath;
+        $this->restoreMode = $options->restoreMode;
+        $this->restoreTelemetry = $options->restoreTelemetry;
+    }
 
     public function clean(string $text, ?float $threshold = null): GazeSession
     {
         $this->assertInput($text);
-
-        $effectiveThreshold = $this->resolveNerThreshold($threshold);
 
         $command = [
             $this->resolver->resolve(),
@@ -89,93 +81,36 @@ class Gaze implements AuditRunner, GazeContract
             '--format=json',
         ];
 
-        if ($effectiveThreshold !== null) {
-            $command[] = '--ner-threshold='.$effectiveThreshold;
-        }
-
-        if ($this->maxBytes !== null) {
-            $command[] = '--max-bytes='.$this->maxBytes;
-        }
-
-        if ($this->sessionTtlSeconds !== null) {
-            $command[] = '--session-ttl='.$this->sessionTtlSeconds;
-        }
-
-        if ($this->sessionScope !== null && $this->sessionScope !== '') {
-            $command[] = '--session-scope='.$this->sessionScope;
-        }
-
-        if ($this->auditDbPath !== null && $this->auditDbPath !== '') {
-            $command[] = '--audit-db='.$this->auditDbPath;
-        }
-
-        if ($this->locale !== null && $this->locale !== '') {
-            $command[] = '--locale='.$this->locale;
-        }
-
-        foreach ($this->rulepacks ?? [] as $rulepack) {
-            $command[] = '--rulepack-bundled='.$rulepack;
-        }
-
-        foreach ($this->rulepackPaths ?? [] as $path) {
-            $command[] = '--rulepack-path='.$path;
-        }
-
-        if ($this->safetyNet) {
-            $command[] = '--safety-net=openai-filter';
-        }
-
-        if ($this->safetyNetDevice !== null && $this->safetyNetDevice !== '') {
-            $command[] = '--openai-filter-device='.$this->safetyNetDevice;
-        }
-
-        if ($this->openaiFilterCommand !== null && $this->openaiFilterCommand !== '') {
-            $command[] = '--openai-filter-command='.$this->openaiFilterCommand;
-        }
-
-        if ($this->openaiFilterCheckpoint !== null && $this->openaiFilterCheckpoint !== '') {
-            $command[] = '--openai-filter-checkpoint='.$this->openaiFilterCheckpoint;
-        }
-
-        if ($this->openaiFilterOperatingPoint !== null && $this->openaiFilterOperatingPoint !== '') {
-            $command[] = '--openai-filter-operating-point='.$this->openaiFilterOperatingPoint;
-        }
-
-        if ($this->safetyNetTimeoutMs !== null) {
-            $command[] = '--safety-net-timeout-ms='.$this->safetyNetTimeoutMs;
-        }
-
-        if ($this->safetyNetInputLimitBytes !== null) {
-            $command[] = '--safety-net-input-limit-bytes='.$this->safetyNetInputLimitBytes;
-        }
-
-        if ($this->safetyNetMode !== null && $this->safetyNetMode !== '') {
-            $command[] = '--safety-net-mode='.$this->safetyNetMode;
-        }
-
-        if ($this->safetyNetBackend !== null && $this->safetyNetBackend !== '') {
-            $command[] = '--safety-net-backend='.$this->safetyNetBackend;
-        }
-
-        if ($this->kijiBackend !== null && $this->kijiBackend !== '') {
-            $command[] = '--kiji-backend='.$this->kijiBackend;
-        }
-
-        if ($this->kijiDistilbertPrecision !== null && $this->kijiDistilbertPrecision !== '') {
-            $command[] = '--kiji-distilbert-precision='.$this->kijiDistilbertPrecision;
-        }
-
-        if ($this->kijiDistilbertCommand !== null && $this->kijiDistilbertCommand !== '') {
-            $command[] = '--kiji-distilbert-command='.$this->kijiDistilbertCommand;
-        }
-
-        if ($this->kijiDistilbertModelDir !== null && $this->kijiDistilbertModelDir !== '') {
-            $command[] = '--kiji-distilbert-model-dir='.$this->kijiDistilbertModelDir;
-        }
-
-        if ($this->safetyNetFallback !== null && $this->safetyNetFallback !== '') {
-            $command[] = '--safety-net-fallback='.$this->safetyNetFallback;
-        }
+        // Declarative flag map, appended in DECLARATION ORDER — the argv
+        // sequence is a pinned contract (ArgvAssemblyTest and friends), so
+        // add new flags in the position the binary expects, not alphabetically.
+        // null / '' omits a flag; a list value repeats its flag per element.
+        $this->appendFlags($command, [
+            '--ner-threshold' => $this->resolveNerThreshold($threshold),
+            '--max-bytes' => $this->options->maxBytes,
+            '--session-ttl' => $this->options->sessionTtlSeconds,
+            '--session-scope' => $this->options->sessionScope,
+            '--audit-db' => $this->options->auditDbPath,
+            '--locale' => $this->options->locale,
+            '--rulepack-bundled' => $this->options->rulepacks,
+            '--rulepack-path' => $this->options->rulepackPaths,
+            // v0.6.4+ contract: the enable switch must carry the backend kind;
+            // a bare --safety-net is rejected by the binary.
+            '--safety-net' => $this->options->safetyNet ? 'openai-filter' : null,
+            '--openai-filter-device' => $this->options->safetyNetDevice,
+            '--openai-filter-command' => $this->options->openaiFilterCommand,
+            '--openai-filter-checkpoint' => $this->options->openaiFilterCheckpoint,
+            '--openai-filter-operating-point' => $this->options->openaiFilterOperatingPoint,
+            '--safety-net-timeout-ms' => $this->options->safetyNetTimeoutMs,
+            '--safety-net-input-limit-bytes' => $this->options->safetyNetInputLimitBytes,
+            '--safety-net-mode' => $this->options->safetyNetMode,
+            '--safety-net-backend' => $this->options->safetyNetBackend,
+            '--kiji-backend' => $this->options->kijiBackend,
+            '--kiji-distilbert-precision' => $this->options->kijiDistilbertPrecision,
+            '--kiji-distilbert-command' => $this->options->kijiDistilbertCommand,
+            '--kiji-distilbert-model-dir' => $this->options->kijiDistilbertModelDir,
+            '--safety-net-fallback' => $this->options->safetyNetFallback,
+        ]);
 
         $result = $this->run($command, $text, 'clean');
 
@@ -189,6 +124,29 @@ class Gaze implements AuditRunner, GazeContract
             entries: $this->mapEntries($decoded['entries'] ?? null),
             leakReport: $this->mapLeakReport($decoded['leak_report'] ?? null),
         );
+    }
+
+    /**
+     * Append `--flag=value` pairs to the argv in map order. A null or ''
+     * value omits its flag entirely; a list value repeats the flag once per
+     * element (e.g. `--rulepack-bundled=a --rulepack-bundled=b`). Numeric
+     * values stringify exactly as the previous string-concatenation blocks
+     * did — this helper only centralizes the append loop, not the formatting.
+     *
+     * @param  list<string>  $command
+     * @param  array<string, int|float|string|list<string>|null>  $flags
+     */
+    private function appendFlags(array &$command, array $flags): void
+    {
+        foreach ($flags as $flag => $value) {
+            foreach (is_array($value) ? $value : [$value] as $single) {
+                if ($single === null || $single === '') {
+                    continue;
+                }
+
+                $command[] = $flag.'='.$single;
+            }
+        }
     }
 
     /**
@@ -244,7 +202,7 @@ class Gaze implements AuditRunner, GazeContract
      */
     private function resolveNerThreshold(?float $threshold): ?float
     {
-        $effective = $threshold ?? $this->nerThreshold;
+        $effective = $threshold ?? $this->options->nerThreshold;
 
         if ($effective !== null && ($effective < 0.0 || $effective > 1.0)) {
             throw new \InvalidArgumentException(
