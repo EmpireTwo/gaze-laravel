@@ -73,7 +73,7 @@ final class SafetyNetConfigurator
         $updated = $this->upsert($original, $pairs);
 
         if ($exists && $updated === $original) {
-            return new SafetyNetConfiguratorResult('unchanged', $pairs, $this->envPath, null);
+            return new SafetyNetConfiguratorResult(SafetyNetConfigStatus::Unchanged, $pairs, $this->envPath, null);
         }
 
         $backupPath = $this->envPath.'.backup';
@@ -93,7 +93,7 @@ final class SafetyNetConfigurator
             throw new \RuntimeException("could not write .env: {$this->envPath}");
         }
 
-        return new SafetyNetConfiguratorResult('written', $pairs, $this->envPath, is_file($backupPath) ? $backupPath : null);
+        return new SafetyNetConfiguratorResult(SafetyNetConfigStatus::Written, $pairs, $this->envPath, is_file($backupPath) ? $backupPath : null);
     }
 
     /**
