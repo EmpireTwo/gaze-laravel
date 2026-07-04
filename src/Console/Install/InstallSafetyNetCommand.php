@@ -44,7 +44,7 @@ final class InstallSafetyNetCommand extends Command
         if (! in_array($backend, ['opf', 'kiji'], true)) {
             $this->error("unknown safety-net backend '{$backend}'; expected opf or kiji");
 
-            return 2;
+            return self::INVALID;
         }
 
         $modelDir = null;
