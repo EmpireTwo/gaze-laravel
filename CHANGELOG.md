@@ -23,6 +23,20 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
   so a new upstream error variant is a one-line addition. Message strings are
   unchanged, and raw stderr still never reaches messages or log context.
 
+### Deprecated
+
+- The `Queue\Contracts\RequiresFreshClean` marker interface. The
+  `GazeIntegrityException::requiresFreshClean()` method is the canonical
+  fresh-clean signal — it lives on the exception (mirroring the
+  `HasRetryDisposition` method-based pattern) and can give variant-dependent
+  answers, which a static marker cannot. Branch on
+  `$e instanceof GazeIntegrityException && $e->requiresFreshClean()` instead of
+  `$e instanceof RequiresFreshClean`. `GazeBlobExpiredException` and
+  `GazeInvalidBlobVersionException` keep implementing the marker until 1.0, so
+  existing `instanceof` checks continue to work; nothing in this package ever
+  dispatched on it (`GazeRetryPolicy` does not consult it). Resolves
+  architecture debt L-3 (two paths for the same semantic).
+
 ### Added
 
 - `gaze:doctor` now flags a stale pinned binary (north-star P7, "doctor before

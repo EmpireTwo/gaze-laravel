@@ -25,8 +25,8 @@ Every exception this package throws extends `CertaMesh\Gaze\Exceptions\GazeExcep
     │   ├── GazeSafetyNetFailureException (HasRetryDisposition — variant-dependent retry policy)
     │   ├── GazeUnsupportedSessionScopeException (NonRetryable)
     │   ├── GazeInvalidSignatureException (NonRetryable)
-    │   ├── GazeInvalidBlobVersionException (NonRetryable + RequiresFreshClean)
-    │   ├── GazeBlobExpiredException     (NonRetryable + RequiresFreshClean)
+    │   ├── GazeInvalidBlobVersionException (NonRetryable, requiresFreshClean() = true)
+    │   ├── GazeBlobExpiredException     (NonRetryable, requiresFreshClean() = true)
     │   └── GazePipelineException        (Retryable)
     ├── GazeInfraException               (exit bucket 4 / 141 — infra/I-O error)
     │   ├── GazeIoException              (RetryableWithAlert)
@@ -54,13 +54,13 @@ The `Install\Ner*` family lives under the `CertaMesh\Gaze\Install` namespace. Th
 | `NonRetryable` | `Queue\Contracts` | `GazeRetryPolicy` calls `$job->fail()` — permanent failure, no retry. |
 | `Retryable` | `Queue\Contracts` | `GazeRetryPolicy` calls `$job->release()` with backoff — transient, retry. |
 | `RetryableWithAlert` | `Queue\Contracts` | Like `Retryable` plus fires a `GazeInfraAlert` event — infra problem worth alerting. |
-| `RequiresFreshClean` | `Queue\Contracts` | Signals that the session blob is unrecoverable; re-run `Gaze::clean()` on the original text. |
+| `RequiresFreshClean` | `Queue\Contracts` | **Deprecated.** Signals that the session blob is unrecoverable. Branch on `GazeIntegrityException::requiresFreshClean()` instead; the marker is kept on its two implementors until 1.0 for BC. |
 
 ---
 
 ## Exception Table
 
-| Class | Exit Bucket | Retry Behaviour | `RequiresFreshClean` | When Thrown |
+| Class | Exit Bucket | Retry Behaviour | `requiresFreshClean()` | When Thrown |
 |---|---|---|---|---|
 | `GazeException` | — | (base, never thrown directly) | No | — |
 | `GazeCallerBugException` | 1 | `NonRetryable` → fail | No | Abstract base for caller-error subclasses |
@@ -167,15 +167,15 @@ Do **not** branch on `$e instanceof NonRetryable` (or the other markers) for thi
 
 `GazeUnsupportedSessionScopeException::attemptedScope()` returns the rejected scope string from the upstream `variant` sidecar. It is non-retryable because retrying cannot fix invalid configuration/input.
 
-### `GazeInvalidBlobVersionException` + `GazeBlobExpiredException` (`RequiresFreshClean`)
+### `GazeInvalidBlobVersionException` + `GazeBlobExpiredException` (fresh clean required)
 
-Both implement `RequiresFreshClean`. The `requiresFreshClean(): bool` method returns `true`, which is a signal to your job handler that the session blob is permanently unrecoverable and the only path forward is to re-run `Gaze::clean()` on the original plaintext. The `GazeRetryPolicy` itself does not automate this re-run — your job must implement the re-clean logic:
+Both override `requiresFreshClean(): bool` (defined on `GazeIntegrityException`) to return `true` — a signal to your job handler that the session blob is permanently unrecoverable and the only path forward is to re-run `Gaze::clean()` on the original plaintext. The `GazeRetryPolicy` itself does not automate this re-run — your job must implement the re-clean logic:
 
 ```php
-use CertaMesh\Gaze\Queue\Contracts\RequiresFreshClean;
+use CertaMesh\Gaze\Exceptions\GazeIntegrityException;
 
 } catch (\CertaMesh\Gaze\Exceptions\GazeException $e) {
-    if ($e instanceof RequiresFreshClean) {
+    if ($e instanceof GazeIntegrityException && $e->requiresFreshClean()) {
         // Re-clean from original text and re-enqueue.
         dispatch(new ProcessDocumentJob($this->originalText));
         $this->fail($e);
@@ -184,6 +184,8 @@ use CertaMesh\Gaze\Queue\Contracts\RequiresFreshClean;
     \CertaMesh\Gaze\Queue\GazeRetryPolicy::dispatch($e, $this);
 }
 ```
+
+Both classes also still implement the `Queue\Contracts\RequiresFreshClean` marker interface, but it is deprecated: prefer the method, which mirrors the `HasRetryDisposition` method-based pattern and can give variant-dependent answers. The marker stays on these two exceptions until 1.0 for backwards compatibility; nothing in this package dispatches on it.
 
 ### `GazeResponseDecodeException`
 

@@ -167,7 +167,7 @@ Optional session blob TTL forwarded to the binary as `--session-ttl`. Controls h
 GAZE_SESSION_TTL=7200
 ```
 
-**Caveat:** Expired blobs throw `GazeBlobExpiredException` on `restore`. That exception implements both `NonRetryable` and `RequiresFreshClean`, signalling that the only recovery is to re-run `clean` on the original text.
+**Caveat:** Expired blobs throw `GazeBlobExpiredException` on `restore`. That exception is `NonRetryable` and its `requiresFreshClean()` method returns `true`, signalling that the only recovery is to re-run `clean` on the original text.
 
 ---
 
