@@ -219,24 +219,13 @@ class BinaryDownloader
         }
     }
 
-    public static function extract(string $tarPath, string $binDir): void
-    {
-        $phar = new \PharData($tarPath);
-        $gzPath = substr($tarPath, 0, -3); // .tar
-        $phar->decompress();
-        $tar = new \PharData($gzPath);
-        $tar->extractTo($binDir, null, true);
-        @unlink($gzPath);
-    }
-
+    /**
+     * Upstream release assets are raw binaries named `gaze-{target}` (no
+     * archive wrapper — verified against the pinned release's asset list), so
+     * installing is a plain copy of the checksum-verified download.
+     */
     public static function installBinary(string $assetPath, string $binPath): void
     {
-        if (str_ends_with($assetPath, '.tar.gz')) {
-            self::extract($assetPath, dirname($binPath));
-
-            return;
-        }
-
         if (@copy($assetPath, $binPath) === false) {
             throw new \RuntimeException("could not write {$binPath}");
         }

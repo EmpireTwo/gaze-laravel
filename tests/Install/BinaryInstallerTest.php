@@ -116,22 +116,6 @@ it('requires a checksum entry for the asset', function () {
     BinaryDownloader::verifyChecksum($tar, $sums, 'payload.tar.gz');
 })->throws(RuntimeException::class, 'no checksum entry for payload.tar.gz');
 
-it('extracts the gaze file into bin-dir', function () {
-    $binDir = $this->tmpDir.'/bin';
-    mkdir($binDir, 0755, true);
-
-    $tar = gl_buildFixtureTarGz(
-        $this->tmpDir,
-        $this->tmpDir.'/pkg',
-        ['gaze' => "#!/bin/sh\necho gaze 0.3.0-rc.3\n"],
-    );
-
-    BinaryDownloader::extract($tar, $binDir);
-
-    expect($binDir.'/gaze')->toBeFile()
-        ->and(file_get_contents($binDir.'/gaze'))->toContain('gaze');
-});
-
 it('honors GAZE_SKIP_BINARY_DOWNLOAD', function () {
     putenv('GAZE_SKIP_BINARY_DOWNLOAD=1');
     try {
