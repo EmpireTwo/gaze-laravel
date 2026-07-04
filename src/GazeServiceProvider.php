@@ -52,6 +52,7 @@ class GazeServiceProvider extends ServiceProvider implements DeferrableProvider
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/gaze.php', 'gaze');
+        $this->normalizeSafetyNetConfig();
 
         $this->app->singleton(BinaryDownloader::class);
 
@@ -218,6 +219,56 @@ class GazeServiceProvider extends ServiceProvider implements DeferrableProvider
 
             return new Encrypter($decoded, $cipher);
         });
+    }
+
+    /**
+     * Bridge the nested `gaze.safety_net.*` group (v0.13+ config shape) to
+     * the deprecated flat root keys so BOTH spellings observe the same
+     * values at runtime:
+     *
+     *  - every flat key still null after the merge is back-filled from its
+     *    nested counterpart (an explicitly set flat key keeps winning for
+     *    legacy runtime overrides), and
+     *  - `gaze.safety_net` itself is collapsed back to the bool enable
+     *    switch, which is what every pre-existing reader —
+     *    `gaze:daemon:serve`, `gaze:doctor`, adopter code — treats it as.
+     *
+     * A pre-v0.13 published config (flat keys, bool `safety_net`) skips this
+     * entirely. The flat keys are deprecated; see UPGRADING.md.
+     */
+    private function normalizeSafetyNetConfig(): void
+    {
+        /** @var ConfigRepository $config */
+        $config = $this->app->make('config');
+        $group = $config->get('gaze.safety_net');
+
+        if (! is_array($group)) {
+            return;
+        }
+
+        $flatFromNested = [
+            'safety_net_backend' => $group['backend'] ?? null,
+            'safety_net_device' => $group['device'] ?? null,
+            'safety_net_timeout_ms' => $group['timeout_ms'] ?? null,
+            'safety_net_input_limit_bytes' => $group['input_limit_bytes'] ?? null,
+            'safety_net_mode' => $group['mode'] ?? null,
+            'safety_net_fallback' => $group['fallback'] ?? null,
+            'openai_filter_command' => $group['openai_filter']['command'] ?? null,
+            'openai_filter_checkpoint' => $group['openai_filter']['checkpoint'] ?? null,
+            'openai_filter_operating_point' => $group['openai_filter']['operating_point'] ?? null,
+            'kiji_backend' => $group['kiji']['backend'] ?? null,
+            'kiji_distilbert_precision' => $group['kiji']['distilbert_precision'] ?? null,
+            'kiji_distilbert_command' => $group['kiji']['distilbert_command'] ?? null,
+            'kiji_distilbert_model_dir' => $group['kiji']['distilbert_model_dir'] ?? null,
+        ];
+
+        foreach ($flatFromNested as $flatKey => $value) {
+            if ($value !== null && $config->get('gaze.'.$flatKey) === null) {
+                $config->set('gaze.'.$flatKey, $value);
+            }
+        }
+
+        $config->set('gaze.safety_net', (bool) ($group['enabled'] ?? false));
     }
 
     public function boot(): void

@@ -18,9 +18,10 @@ return [
 
     /*
      * Hard ceiling on any single gaze invocation. A hung process must be
-     * killed rather than tying up a worker.
+     * killed rather than tying up a worker. Raw env read —
+     * GazeOptions::fromConfig coerces to int (default 30).
      */
-    'timeout_seconds' => (int) env('GAZE_TIMEOUT', 30),
+    'timeout_seconds' => env('GAZE_TIMEOUT', 30),
 
     /*
      * Path to the detector policy file passed to `gaze clean`.
@@ -103,119 +104,150 @@ return [
     'rulepack_paths' => array_filter(explode(',', env('GAZE_RULEPACK_PATHS', ''))),
 
     /*
-     * Enable the safety-net classifier. When true, the binary passes
-     * `--safety-net=openai-filter` (v0.6.4+ contract).
-     */
-    'safety_net' => (bool) env('GAZE_SAFETY_NET', false),
+    |--------------------------------------------------------------------------
+    | Safety Net
+    |--------------------------------------------------------------------------
+    |
+    | Nested configuration for the safety-net classifier tier (v0.13+ shape).
+    | Values are raw `env()` reads — `GazeOptions::fromConfig()` is the single
+    | coercion layer, so no casts belong in this file. Env var names are
+    | unchanged from the pre-v0.13 flat keys.
+    |
+    | The pre-v0.13 flat root keys (`safety_net_mode`,
+    | `openai_filter_command`, `kiji_backend`, …) are DEPRECATED but still
+    | read as a fallback, so previously published configs keep working. At
+    | registration the provider also back-fills the flat keys from this group
+    | (and collapses `gaze.safety_net` to the bool enable switch) so legacy
+    | `config('gaze.safety_net_*')` readers observe the same values. See
+    | UPGRADING.md for the key map.
+    */
+    'safety_net' => [
+        /*
+         * Enable the safety-net classifier. When true, the binary passes
+         * `--safety-net=openai-filter` (v0.6.4+ contract).
+         */
+        'enabled' => env('GAZE_SAFETY_NET', false),
 
-    /*
-     * Optional explicit safety-net backend selector. Valid values are
-     * `openai-filter` (Tier 2 OpenAI privacy-filter subprocess) and
-     * `kiji-distilbert` (Tier 2.5 DistilBERT NER backend). Forwarded
-     * as `--safety-net-backend=<value>` which wins over the legacy
-     * `--safety-net=<kind>` flag when both are set. Null omits the flag and
-     * lets upstream keep the v0.6/v0.7 single-backend default of `openai-filter`.
-     */
-    'safety_net_backend' => env('GAZE_SAFETY_NET_BACKEND'),
+        /*
+         * Optional explicit safety-net backend selector. Valid values are
+         * `openai-filter` (Tier 2 OpenAI privacy-filter subprocess) and
+         * `kiji-distilbert` (Tier 2.5 DistilBERT NER backend). Forwarded
+         * as `--safety-net-backend=<value>` which wins over the legacy
+         * `--safety-net=<kind>` flag when both are set. Null omits the flag and
+         * lets upstream keep the v0.6/v0.7 single-backend default of
+         * `openai-filter`.
+         */
+        'backend' => env('GAZE_SAFETY_NET_BACKEND'),
 
-    /*
-     * Optional Kiji DistilBERT runtime backend. Valid values in the upstream
-     * GitHub-release binary are `subprocess` and `ort`; feature builds may add
-     * `tract` or `candle`. Forwarded as `--kiji-backend=<value>`. For v0.9
-     * int8 inference, set `GAZE_KIJI_BACKEND=ort`.
-     */
-    'kiji_backend' => env('GAZE_KIJI_BACKEND'),
+        /*
+         * CUDA/CPU device for the safety-net model (e.g. `cuda:0`, `cpu`).
+         * Forwarded as `--openai-filter-device=<value>`. Null omits the flag.
+         */
+        'device' => env('GAZE_SAFETY_NET_DEVICE'),
 
-    /*
-     * Optional Kiji DistilBERT ONNX precision. Valid values are `fp32` and
-     * `int8`. Forwarded as `--kiji-distilbert-precision=<value>`. Upstream
-     * requires `--kiji-backend=ort` when this is `int8`.
-     */
-    'kiji_distilbert_precision' => env('GAZE_KIJI_DISTILBERT_PRECISION'),
+        /*
+         * Optional safety-net subprocess timeout in milliseconds. Must be
+         * positive. Forwarded as `--safety-net-timeout-ms=<value>`. Null lets
+         * the binary use its default of 5000 ms.
+         */
+        'timeout_ms' => env('GAZE_SAFETY_NET_TIMEOUT_MS'),
 
-    /*
-     * Optional path to the local Kiji DistilBERT subprocess binary used when
-     * `safety_net_backend=kiji-distilbert`. Forwarded as
-     * `--kiji-distilbert-command=<value>`. Null lets the binary use its PATH
-     * lookup.
-     */
-    'kiji_distilbert_command' => env('GAZE_KIJI_DISTILBERT_COMMAND'),
+        /*
+         * Optional clean-text size cap, in bytes, for the safety-net
+         * subprocess. Must be positive. Forwarded as
+         * `--safety-net-input-limit-bytes=<value>`. Null lets the binary use
+         * its default of 1048576 bytes.
+         */
+        'input_limit_bytes' => env('GAZE_SAFETY_NET_INPUT_LIMIT_BYTES'),
 
-    /*
-     * Optional pinned-artifact directory for the Kiji DistilBERT backend. The
-     * directory must carry `SHA256SUMS`, `labels.json`, `model.onnx`, and
-     * `tokenizer.json` (0o700 dir + 0o600 files for the fail-closed Axis-1
-     * guard). Forwarded as `--kiji-distilbert-model-dir=<value>`. Null omits
-     * the flag and lets upstream surface its own typed
-     * `SafetyNetArtifactMissing` envelope on first invocation.
-     */
-    'kiji_distilbert_model_dir' => env('GAZE_KIJI_DISTILBERT_MODEL_DIR'),
+        /*
+         * Optional suspected-leak handling mode. Valid values are `strict`,
+         * `tolerant`, `redact`, and `resolve`. Forwarded as
+         * `--safety-net-mode=<value>`. Null lets the binary apply its default,
+         * which flipped from `strict` to `resolve` in upstream v0.8.1. Adopters
+         * who relied on the legacy strict-as-default behaviour must set
+         * `GAZE_SAFETY_NET_MODE=strict` explicitly. `tolerant` emits a
+         * deprecation warning upstream.
+         */
+        'mode' => env('GAZE_SAFETY_NET_MODE'),
 
-    /*
-     * CUDA/CPU device for the safety-net model (e.g. `cuda:0`, `cpu`). Forwarded
-     * as `--openai-filter-device=<value>`. Null omits the flag.
-     */
-    'safety_net_device' => env('GAZE_SAFETY_NET_DEVICE'),
+        /*
+         * Optional fallback when `mode` is `redact` or `resolve` and the
+         * active backend cannot complete (timeout, oversized input, etc.).
+         * Valid values are `strict`, `tolerant`, and `redact`. Forwarded as
+         * `--safety-net-fallback=<value>`. Null lets the binary use its
+         * default of `redact`.
+         */
+        'fallback' => env('GAZE_SAFETY_NET_FALLBACK'),
 
-    /*
-     * Optional path to the local `opf` binary used by the safety-net classifier.
-     * Forwarded as `--openai-filter-command=<value>`. Null lets the binary use
-     * PATH lookup.
-     */
-    'openai_filter_command' => env('GAZE_OPENAI_FILTER_COMMAND'),
+        /*
+         * Tier 2 OpenAI privacy-filter (`opf`) subprocess backend.
+         */
+        'openai_filter' => [
+            /*
+             * Optional path to the local `opf` binary used by the safety-net
+             * classifier. Forwarded as `--openai-filter-command=<value>`.
+             * Null lets the binary use PATH lookup.
+             */
+            'command' => env('GAZE_OPENAI_FILTER_COMMAND'),
 
-    /*
-     * Optional model checkpoint directory for the safety-net classifier.
-     * Forwarded as `--openai-filter-checkpoint=<value>`. Null lets the binary
-     * use its built-in default.
-     */
-    'openai_filter_checkpoint' => env('GAZE_OPENAI_FILTER_CHECKPOINT'),
+            /*
+             * Optional model checkpoint directory for the safety-net
+             * classifier. Forwarded as `--openai-filter-checkpoint=<value>`.
+             * Null lets the binary use its built-in default.
+             */
+            'checkpoint' => env('GAZE_OPENAI_FILTER_CHECKPOINT'),
 
-    /*
-     * Optional safety-net sensitivity trade-off. Valid values are `high-recall`,
-     * `balanced`, and `high-precision`. Forwarded as
-     * `--openai-filter-operating-point=<value>`. Null lets the binary use its
-     * default.
-     */
-    'openai_filter_operating_point' => env('GAZE_OPENAI_FILTER_OPERATING_POINT'),
+            /*
+             * Optional safety-net sensitivity trade-off. Valid values are
+             * `high-recall`, `balanced`, and `high-precision`. Forwarded as
+             * `--openai-filter-operating-point=<value>`. Null lets the binary
+             * use its default.
+             */
+            'operating_point' => env('GAZE_OPENAI_FILTER_OPERATING_POINT'),
+        ],
 
-    /*
-     * Optional safety-net subprocess timeout in milliseconds. Must be positive.
-     * Forwarded as `--safety-net-timeout-ms=<value>`. Null lets the binary use
-     * its default of 5000 ms.
-     */
-    'safety_net_timeout_ms' => env('GAZE_SAFETY_NET_TIMEOUT_MS') === null
-        ? null
-        : (int) env('GAZE_SAFETY_NET_TIMEOUT_MS'),
+        /*
+         * Tier 2.5 Kiji DistilBERT NER backend.
+         */
+        'kiji' => [
+            /*
+             * Optional Kiji DistilBERT runtime backend. Valid values in the
+             * upstream GitHub-release binary are `subprocess` and `ort`;
+             * feature builds may add `tract` or `candle`. Forwarded as
+             * `--kiji-backend=<value>`. For v0.9 int8 inference, set
+             * `GAZE_KIJI_BACKEND=ort`.
+             */
+            'backend' => env('GAZE_KIJI_BACKEND'),
 
-    /*
-     * Optional clean-text size cap, in bytes, for the safety-net subprocess.
-     * Must be positive. Forwarded as `--safety-net-input-limit-bytes=<value>`.
-     * Null lets the binary use its default of 1048576 bytes.
-     */
-    'safety_net_input_limit_bytes' => env('GAZE_SAFETY_NET_INPUT_LIMIT_BYTES') === null
-        ? null
-        : (int) env('GAZE_SAFETY_NET_INPUT_LIMIT_BYTES'),
+            /*
+             * Optional Kiji DistilBERT ONNX precision. Valid values are
+             * `fp32` and `int8`. Forwarded as
+             * `--kiji-distilbert-precision=<value>`. Upstream requires
+             * `--kiji-backend=ort` when this is `int8`.
+             */
+            'distilbert_precision' => env('GAZE_KIJI_DISTILBERT_PRECISION'),
 
-    /*
-     * Optional suspected-leak handling mode. Valid values are `strict`,
-     * `tolerant`, `redact`, and `resolve`. Forwarded as
-     * `--safety-net-mode=<value>`. Null lets the binary apply its default,
-     * which flipped from `strict` to `resolve` in upstream v0.8.1. Adopters
-     * who relied on the legacy strict-as-default behaviour must set
-     * `GAZE_SAFETY_NET_MODE=strict` explicitly. `tolerant` emits a
-     * deprecation warning upstream.
-     */
-    'safety_net_mode' => env('GAZE_SAFETY_NET_MODE'),
+            /*
+             * Optional path to the local Kiji DistilBERT subprocess binary
+             * used when `backend=kiji-distilbert`. Forwarded as
+             * `--kiji-distilbert-command=<value>`. Null lets the binary use
+             * its PATH lookup.
+             */
+            'distilbert_command' => env('GAZE_KIJI_DISTILBERT_COMMAND'),
 
-    /*
-     * Optional fallback when `safety_net_mode` is `redact` or `resolve` and
-     * the active backend cannot complete (timeout, oversized input, etc.).
-     * Valid values are `strict`, `tolerant`, and `redact`. Forwarded as
-     * `--safety-net-fallback=<value>`. Null lets the binary use its default
-     * of `redact`.
-     */
-    'safety_net_fallback' => env('GAZE_SAFETY_NET_FALLBACK'),
+            /*
+             * Optional pinned-artifact directory for the Kiji DistilBERT
+             * backend. The directory must carry `SHA256SUMS`, `labels.json`,
+             * `model.onnx`, and `tokenizer.json` (0o700 dir + 0o600 files for
+             * the fail-closed Axis-1 guard). Forwarded as
+             * `--kiji-distilbert-model-dir=<value>`. Null omits the flag and
+             * lets upstream surface its own typed `SafetyNetArtifactMissing`
+             * envelope on first invocation.
+             */
+            'distilbert_model_dir' => env('GAZE_KIJI_DISTILBERT_MODEL_DIR'),
+        ],
+    ],
 
     /*
      * Optional restore behavior for unknown tokens. Valid values are `strict`

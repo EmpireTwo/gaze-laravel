@@ -20,6 +20,21 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
   receives is byte-for-byte identical (contract-pinned by the argv tests).
   Pre-1.0, so this lands on a MINOR bump.
 
+### Changed
+
+- The shipped `config/gaze.php` groups the ~14 flat safety-net / OPF / Kiji
+  root keys into one nested `'safety_net' => [...]` group (with
+  `openai_filter` and `kiji` sub-groups). **Not breaking:** env var names are
+  unchanged; `GazeOptions::fromConfig()` reads the nested keys first and falls
+  back to the deprecated flat keys, so pre-v0.13 published configs keep
+  working; and at registration the provider back-fills the flat keys from the
+  nested group (collapsing `gaze.safety_net` back to the bool enable switch)
+  so legacy `config('gaze.safety_net_*')` readers — including
+  `gaze:daemon:serve` and `gaze:doctor` — observe the same values. The flat
+  keys are deprecated and will be dropped no earlier than v1.0. The config
+  file no longer carries inline casts — coercion lives solely in
+  `GazeOptions::fromConfig()`. See UPGRADING.md for the full key map.
+
 ### Added
 
 - `gaze:doctor` now flags a stale pinned binary (north-star P7, "doctor before
