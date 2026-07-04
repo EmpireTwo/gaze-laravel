@@ -19,6 +19,21 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
   until a runtime feature went missing. The version-token parsing is now a shared
   `BinaryDownloader::parseVersion()` so the install-skip decision and this probe
   agree on what "the installed version" is.
+- `CertaMesh\Gaze\Daemon\DaemonArgv` — the single source of truth for the
+  `gaze daemon` config→flag mapping. Both spawn paths (`gaze:daemon:serve` and
+  the `Gaze::daemon()` facade `DaemonClient` binding) now delegate to it, so
+  the artisan and facade argv assemblies cannot drift. Null/empty config keys
+  still omit the flag so upstream defaults apply.
+
+### Fixed
+
+- The `Gaze::daemon()` facade spawn path now forwards the **full** daemon flag
+  surface. Previously it assembled only `--policy`, `--idle-timeout`, and
+  `--audit-db`, silently dropping configured `gaze.daemon.session_idle_timeout_s`,
+  `session_cap`, `ner_model_dir`, `ner_locale`, `kiji_distilbert_locales`, and
+  the shared pipeline keys (`gaze.locale`, `gaze.ner_threshold`, and the whole
+  safety-net / OpenAI-filter / Kiji family) when the daemon was spawned via the
+  facade instead of `gaze:daemon:serve`.
 
 ### Removed (BREAKING)
 

@@ -85,10 +85,14 @@ populating a key forwards the matching flag.
 
 ### Shared pipeline keys
 
-`gaze:daemon:serve` also forwards the shared pipeline flags from the
-**same top-level `gaze.*` keys the one-shot `Gaze::clean()` path uses**,
-so a configured pipeline behaves identically in both runtimes — no
-duplicate daemon-scoped copies to keep in sync:
+Both daemon spawn paths — `gaze:daemon:serve` and the `Gaze::daemon()`
+facade (which spawns the daemon through `DaemonClient`) — assemble their
+argv from one shared assembler (`Daemon\DaemonArgv`), so the two paths
+carry **full flag parity by construction** and cannot drift. Both also
+forward the shared pipeline flags from the **same top-level `gaze.*`
+keys the one-shot `Gaze::clean()` path uses**, so a configured pipeline
+behaves identically in every runtime — no duplicate daemon-scoped
+copies to keep in sync:
 
 - `gaze.locale` → `--locale=`
 - `gaze.ner_threshold` → `--ner-threshold=`
@@ -170,6 +174,12 @@ foreach ($turns as $turn) {
 `Gaze::daemon()` returns a `DaemonManager` request-scoped (Octane-safe).
 `session($id)` returns a `DaemonSession` memoised per `$id` so repeated
 lookups in an agent loop are allocation-free.
+
+The daemon spawned on this path carries the **same full flag surface**
+as `gaze:daemon:serve` — session tuning, NER overrides, and the
+safety-net family are all forwarded from config (see
+[Shared pipeline keys](#shared-pipeline-keys)); both paths delegate to
+the shared `Daemon\DaemonArgv` assembler.
 
 ### Direct hot path (P5 agentic preservation)
 
