@@ -32,8 +32,8 @@ beforeEach(function () {
     $versionProcess = new Process([$binary, '--version']);
     $versionProcess->run();
     $versionOutput = trim($versionProcess->getOutput());
-    $version = BinaryDownloader::parseVersion($versionOutput);
-    if ($version === null) {
+    $version = BinaryDownloader::parseVersion($versionOutput) ?? '';
+    if ($version === '') {
         $this->fail("Gaze binary at {$binary} reported unparseable version output '{$versionOutput}'.");
     }
     if (version_compare($version, BinaryDownloader::PINNED_VERSION, '<')) {

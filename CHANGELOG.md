@@ -40,6 +40,18 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
   requirement and the `extra.class` plugin declaration. See
   [UPGRADING.md](UPGRADING.md) (`v0.12.0 → v0.13.0`) for the full guide.
 
+### Fixed
+
+- Tests: the integration behavior pins (`PublishedPolicyTest`, `PolicyRegexBoundaryTest`)
+  no longer perma-skip on a stale `0.5.x` version sniff — they now gate on
+  `BinaryDownloader::parseVersion() >= PINNED_VERSION` and pin actual v0.11.3
+  behavior — and `ServiceProviderTest` no longer reddens the suite when
+  `GAZE_BINARY` is exported (the documented way to run the integration tests).
+  Un-skipping surfaced two published-policy gaps against the pinned binary
+  (IBANs and symbol-currency amounts pass through unredacted); tracked in
+  [#141](https://github.com/CertaMesh/gaze-laravel/issues/141) with the
+  affected cases skipped-with-TODO, not papered over.
+
 ## [0.12.0] - 2026-07-03
 
 ### Changed (BREAKING)
