@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use CertaMesh\Gaze\Install\BinaryDownloader;
 use CertaMesh\Gaze\Install\BinaryInstaller;
 use Composer\IO\BufferIO;
 
@@ -27,7 +28,7 @@ afterEach(function () {
 });
 
 it('detects a supported target triple on macOS or Linux', function () {
-    $target = BinaryInstaller::detectTarget();
+    $target = BinaryDownloader::detectTarget();
 
     if ($target === null) {
         $this->markTestSkipped('running on an unsupported platform');
@@ -37,7 +38,7 @@ it('detects a supported target triple on macOS or Linux', function () {
 });
 
 it('returns false from alreadyInstalled when binary is missing', function () {
-    expect(BinaryInstaller::alreadyInstalled($this->tmpDir.'/nope', '0.1.0'))->toBeFalse();
+    expect(BinaryDownloader::alreadyInstalled($this->tmpDir.'/nope', '0.1.0'))->toBeFalse();
 });
 
 it('matches alreadyInstalled only when the version output token is exactly the version', function () {
@@ -47,9 +48,9 @@ it('matches alreadyInstalled only when the version output token is exactly the v
         "echo 'gaze 0.3.0-rc.3'.PHP_EOL;",
     );
 
-    expect(BinaryInstaller::alreadyInstalled($path, '0.3.0-rc.3'))->toBeTrue()
-        ->and(BinaryInstaller::alreadyInstalled($path, '0.3.0'))->toBeFalse()
-        ->and(BinaryInstaller::alreadyInstalled($path, '0.4.0'))->toBeFalse();
+    expect(BinaryDownloader::alreadyInstalled($path, '0.3.0-rc.3'))->toBeTrue()
+        ->and(BinaryDownloader::alreadyInstalled($path, '0.3.0'))->toBeFalse()
+        ->and(BinaryDownloader::alreadyInstalled($path, '0.4.0'))->toBeFalse();
 });
 
 it('does not let a longer installed version substring-satisfy a shorter pin', function () {
@@ -61,8 +62,8 @@ it('does not let a longer installed version substring-satisfy a shorter pin', fu
         "echo 'gaze 0.11.10'.PHP_EOL;",
     );
 
-    expect(BinaryInstaller::alreadyInstalled($path, '0.11.1'))->toBeFalse()
-        ->and(BinaryInstaller::alreadyInstalled($path, '0.11.10'))->toBeTrue();
+    expect(BinaryDownloader::alreadyInstalled($path, '0.11.1'))->toBeFalse()
+        ->and(BinaryDownloader::alreadyInstalled($path, '0.11.10'))->toBeTrue();
 });
 
 it('returns false from alreadyInstalled when version probe exits non-zero', function () {
@@ -72,7 +73,7 @@ it('returns false from alreadyInstalled when version probe exits non-zero', func
         "fwrite(STDERR, 'probe failed'.PHP_EOL);\nexit(1);",
     );
 
-    expect(BinaryInstaller::alreadyInstalled($path, '0.3.0'))->toBeFalse();
+    expect(BinaryDownloader::alreadyInstalled($path, '0.3.0'))->toBeFalse();
 });
 
 it('accepts a matching sha256 in verifyChecksum', function () {
@@ -88,7 +89,7 @@ it('accepts a matching sha256 in verifyChecksum', function () {
         ."{$sha} *payload.tar.gz\n",
     );
 
-    BinaryInstaller::verifyChecksum($tar, $sums, 'payload.tar.gz');
+    BinaryDownloader::verifyChecksum($tar, $sums, 'payload.tar.gz');
     expect($tar)->toBeFile();
 });
 
@@ -102,7 +103,7 @@ it('rejects a sha256 mismatch in verifyChecksum', function () {
         "0000000000000000000000000000000000000000000000000000000000000000  payload.tar.gz\n",
     );
 
-    BinaryInstaller::verifyChecksum($tar, $sums, 'payload.tar.gz');
+    BinaryDownloader::verifyChecksum($tar, $sums, 'payload.tar.gz');
 })->throws(RuntimeException::class, 'sha256 mismatch for payload.tar.gz');
 
 it('requires a checksum entry for the asset', function () {
@@ -112,7 +113,7 @@ it('requires a checksum entry for the asset', function () {
     $sums = $this->tmpDir.'/SHA256SUMS';
     file_put_contents($sums, "# empty\n");
 
-    BinaryInstaller::verifyChecksum($tar, $sums, 'payload.tar.gz');
+    BinaryDownloader::verifyChecksum($tar, $sums, 'payload.tar.gz');
 })->throws(RuntimeException::class, 'no checksum entry for payload.tar.gz');
 
 it('extracts the gaze file into bin-dir', function () {
@@ -125,7 +126,7 @@ it('extracts the gaze file into bin-dir', function () {
         ['gaze' => "#!/bin/sh\necho gaze 0.3.0-rc.3\n"],
     );
 
-    BinaryInstaller::extract($tar, $binDir);
+    BinaryDownloader::extract($tar, $binDir);
 
     expect($binDir.'/gaze')->toBeFile()
         ->and(file_get_contents($binDir.'/gaze'))->toContain('gaze');
@@ -203,7 +204,7 @@ it('parses status and Location header', function () {
         'Content-Length: 0',
     ];
 
-    [$status, $location] = BinaryInstaller::parseStatusAndLocation($headers);
+    [$status, $location] = BinaryDownloader::parseStatusAndLocation($headers);
 
     expect($status)->toBe(302)
         ->and($location)->toBe('https://objects.example.com/foo.tar.gz');
@@ -216,28 +217,28 @@ it('keeps the final Location when multiple HTTP status lines appear', function (
         'Content-Type: application/octet-stream',
     ];
 
-    [$status, $location] = BinaryInstaller::parseStatusAndLocation($headers);
+    [$status, $location] = BinaryDownloader::parseStatusAndLocation($headers);
 
     expect($status)->toBe(200)
         ->and($location)->toBeNull();
 });
 
 it('resolves absolute redirect URLs unchanged', function () {
-    expect(BinaryInstaller::resolveLocation(
+    expect(BinaryDownloader::resolveLocation(
         'https://github.com/x/y/z',
         'https://cdn.example.com/blob',
     ))->toBe('https://cdn.example.com/blob');
 });
 
 it('resolves root-relative redirects onto the origin scheme and host', function () {
-    expect(BinaryInstaller::resolveLocation(
+    expect(BinaryDownloader::resolveLocation(
         'https://github.com/x/y/z',
         '/download/artifact.tar.gz',
     ))->toBe('https://github.com/download/artifact.tar.gz');
 });
 
 it('resolves path-relative redirects against the current directory', function () {
-    expect(BinaryInstaller::resolveLocation(
+    expect(BinaryDownloader::resolveLocation(
         'https://example.com/a/b/c',
         'd.tar.gz',
     ))->toBe('https://example.com/a/b/d.tar.gz');
@@ -246,23 +247,23 @@ it('resolves path-relative redirects against the current directory', function ()
 it('derives github owner/repo from the default release base', function () {
     $base = 'https://github.com/CertaMesh/gaze/releases/download';
 
-    expect(BinaryInstaller::deriveGithubRepo($base))->toBe('CertaMesh/gaze');
+    expect(BinaryDownloader::deriveGithubRepo($base))->toBe('CertaMesh/gaze');
 });
 
 it('derives github owner/repo when the base has a trailing path segment', function () {
     $base = 'https://github.com/CertaMesh/gaze/releases/download/v0.3.0';
 
-    expect(BinaryInstaller::deriveGithubRepo($base))->toBe('CertaMesh/gaze');
+    expect(BinaryDownloader::deriveGithubRepo($base))->toBe('CertaMesh/gaze');
 });
 
 it('returns null for non-github release bases', function () {
-    expect(BinaryInstaller::deriveGithubRepo('https://mirror.internal/gaze/releases/download'))->toBeNull()
-        ->and(BinaryInstaller::deriveGithubRepo('https://example.com/foo/bar'))->toBeNull()
-        ->and(BinaryInstaller::deriveGithubRepo('http://github.com/CertaMesh/gaze/releases/download'))->toBeNull();
+    expect(BinaryDownloader::deriveGithubRepo('https://mirror.internal/gaze/releases/download'))->toBeNull()
+        ->and(BinaryDownloader::deriveGithubRepo('https://example.com/foo/bar'))->toBeNull()
+        ->and(BinaryDownloader::deriveGithubRepo('http://github.com/CertaMesh/gaze/releases/download'))->toBeNull();
 });
 
 it('builds unauthenticated request headers without an Authorization line', function () {
-    $headers = BinaryInstaller::buildRequestHeaders(null, 'application/octet-stream');
+    $headers = BinaryDownloader::buildRequestHeaders(null, 'application/octet-stream');
 
     expect($headers)->toContain('Accept: application/octet-stream')
         ->and($headers)->toContain('User-Agent: gaze-laravel/'.BinaryInstaller::PINNED_VERSION);
@@ -274,7 +275,7 @@ it('builds unauthenticated request headers without an Authorization line', funct
 });
 
 it('builds authenticated request headers with Bearer auth and the api version pin', function () {
-    $headers = BinaryInstaller::buildRequestHeaders('ghp_testtoken123', 'application/vnd.github+json');
+    $headers = BinaryDownloader::buildRequestHeaders('ghp_testtoken123', 'application/vnd.github+json');
 
     expect($headers)->toContain('Accept: application/vnd.github+json')
         ->and($headers)->toContain('User-Agent: gaze-laravel/'.BinaryInstaller::PINNED_VERSION)
@@ -288,7 +289,7 @@ it('builds authenticated request headers with Bearer auth and the api version pi
 });
 
 it('treats an empty token as unauthenticated when building headers', function () {
-    $headers = BinaryInstaller::buildRequestHeaders('', 'application/octet-stream');
+    $headers = BinaryDownloader::buildRequestHeaders('', 'application/octet-stream');
 
     foreach ($headers as $line) {
         expect(stripos($line, 'Authorization:'))->toBeFalse();
@@ -302,7 +303,7 @@ it('keeps Authorization when redirect stays on the same host', function () {
         'Accept: application/octet-stream',
     ];
 
-    $result = BinaryInstaller::stripAuthOnCrossHost($headers, 'api.github.com', 'api.github.com');
+    $result = BinaryDownloader::stripAuthOnCrossHost($headers, 'api.github.com', 'api.github.com');
 
     expect($result)->toBe($headers);
 });
@@ -314,7 +315,7 @@ it('strips Authorization when redirect crosses to a different host (S3)', functi
         'Accept: application/octet-stream',
     ];
 
-    $result = BinaryInstaller::stripAuthOnCrossHost($headers, 'api.github.com', 'objects.githubusercontent.com');
+    $result = BinaryDownloader::stripAuthOnCrossHost($headers, 'api.github.com', 'objects.githubusercontent.com');
 
     expect($result)->toBe([
         'User-Agent: gaze-laravel/0.3.0',
@@ -328,7 +329,7 @@ it('strips Authorization defensively when host parsing fails', function () {
         'User-Agent: gaze-laravel/0.3.0',
     ];
 
-    $result = BinaryInstaller::stripAuthOnCrossHost($headers, 'api.github.com', null);
+    $result = BinaryDownloader::stripAuthOnCrossHost($headers, 'api.github.com', null);
 
     expect($result)->toBe(['User-Agent: gaze-laravel/0.3.0']);
 });
@@ -344,7 +345,7 @@ it('extracts asset id pair from a github releases tag JSON payload', function ()
         ],
     ]);
 
-    [$assetId, $sumsId] = BinaryInstaller::extractAssetIds(
+    [$assetId, $sumsId] = BinaryDownloader::extractAssetIds(
         (string) $json,
         'gaze-aarch64-apple-darwin',
         'v0.3.0',
@@ -355,7 +356,7 @@ it('extracts asset id pair from a github releases tag JSON payload', function ()
 });
 
 it('throws when the github releases tag JSON has no assets array', function () {
-    BinaryInstaller::extractAssetIds('{"message":"Not Found"}', 'gaze-aarch64-apple-darwin', 'v0.3.0');
+    BinaryDownloader::extractAssetIds('{"message":"Not Found"}', 'gaze-aarch64-apple-darwin', 'v0.3.0');
 })->throws(RuntimeException::class, 'invalid JSON or no assets[]');
 
 it('throws when the asset name is missing from the release', function () {
@@ -366,7 +367,7 @@ it('throws when the asset name is missing from the release', function () {
         ],
     ]);
 
-    BinaryInstaller::extractAssetIds($json, 'gaze-aarch64-apple-darwin', 'v0.3.0');
+    BinaryDownloader::extractAssetIds($json, 'gaze-aarch64-apple-darwin', 'v0.3.0');
 })->throws(RuntimeException::class, 'asset gaze-aarch64-apple-darwin not found');
 
 it('throws when the .sha256 sidecar asset is missing from the release', function () {
@@ -376,7 +377,7 @@ it('throws when the .sha256 sidecar asset is missing from the release', function
         ],
     ]);
 
-    BinaryInstaller::extractAssetIds($json, 'gaze-aarch64-apple-darwin', 'v0.3.0');
+    BinaryDownloader::extractAssetIds($json, 'gaze-aarch64-apple-darwin', 'v0.3.0');
 })->throws(RuntimeException::class, 'asset gaze-aarch64-apple-darwin.sha256 not found');
 
 it('short-circuits when the binary is already at the pinned version', function () {

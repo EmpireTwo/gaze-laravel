@@ -18,9 +18,9 @@ use Symfony\Component\Process\Process;
  *
  * This single class owns the checksum, redirect, and cross-host auth-strip
  * logic so there is exactly one security-critical download path shared by the
- * Composer plugin ({@see BinaryInstaller}) and the `gaze:install:binary`
- * artisan command. The `https://`-per-hop recheck and the cross-host
- * Authorization strip were moved here verbatim.
+ * opt-in Composer script hook ({@see BinaryInstaller::postInstall()}) and the
+ * `gaze:install:binary` artisan command. The `https://`-per-hop recheck and
+ * the cross-host Authorization strip were moved here verbatim.
  *
  * Not `final`: the artisan commands inject this via the container and tests
  * substitute a subclass stub, so the download pipeline can be exercised without
