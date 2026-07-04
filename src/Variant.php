@@ -106,14 +106,17 @@ enum Variant: string
      *
      * Message shape is a stable contract:
      * `gaze {stage} {summary} (exit={exit}, stderr_sha256={hash})`.
-     * The raw stderr is only consulted for safelisted sidecar fields
-     * (`detail`, `found`, `supported`, `variant`, `backend`, `path`) — it is
-     * NEVER copied into the exception message or log context (PII discipline).
+     * A null `$stderrHash` (no subprocess stderr stream existed) renders as
+     * `stderr_sha256=none`. The raw stderr is only consulted for safelisted
+     * sidecar fields (`detail`, `found`, `supported`, `variant`, `backend`,
+     * `path`) — it is NEVER copied into the exception message or log context
+     * (PII discipline).
      */
-    public function toException(string $stage, int $exitCode, string $stderrHash, string $stderr = ''): GazeException
+    public function toException(string $stage, int $exitCode, ?string $stderrHash, string $stderr = ''): GazeException
     {
         [$class, $summary] = $this->exceptionSpec();
-        $message = "gaze {$stage} {$summary} (exit={$exitCode}, stderr_sha256={$stderrHash})";
+        $hashLabel = $stderrHash ?? 'none';
+        $message = "gaze {$stage} {$summary} (exit={$exitCode}, stderr_sha256={$hashLabel})";
 
         // Variants that carry upstream sidecar fields need bespoke constructor
         // arguments; every other variant shares the standard signature.

@@ -9,7 +9,7 @@ use CertaMesh\Gaze\Variant;
 
 class GazeIoException extends GazeInfraException implements RetryableWithAlert
 {
-    public function __construct(string $message, int $exitCode, string $stderrHash, ?\Throwable $previous = null)
+    public function __construct(string $message, int $exitCode, ?string $stderrHash, ?\Throwable $previous = null)
     {
         parent::__construct($message, $exitCode, $stderrHash, Variant::Io, $previous);
     }

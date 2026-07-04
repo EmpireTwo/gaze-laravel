@@ -4,6 +4,25 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
 
 ## [Unreleased]
 
+### Changed
+
+- `GazeException::$stderrHash` is now nullable (`?string`). `null` means no
+  subprocess stderr stream ever existed — pre-flight validation failures,
+  timeouts, stdout decode failures, daemon envelope errors, and the
+  `Install\Ner*` family — replacing the previous convention of presenting
+  `hash('sha256', '')` (`e3b0c44...`) as a forensic hash of stderr that never
+  was. Exception messages render the null case as `stderr_sha256=none`;
+  `toLogContext()` keeps the `stderr_sha256` key with a `null` value. A real
+  subprocess failure that emitted nothing on stderr still carries the hash of
+  the empty string, so "no stream" and "empty stream" are now distinguishable.
+  If you type-hinted `$e->stderrHash` as `string`, treat it as `?string`.
+- Internal: `Gaze::buildException()` no longer hand-builds each typed
+  exception. Construction lives on the wire enum as
+  `Variant::toException(string $stage, int $exitCode, ?string $stderrHash, string $stderr = '')`,
+  backed by a one-line-per-variant `[exception class, message summary]` table,
+  so a new upstream error variant is a one-line addition. Message strings are
+  unchanged, and raw stderr still never reaches messages or log context.
+
 ### Added
 
 - `gaze:doctor` now flags a stale pinned binary (north-star P7, "doctor before

@@ -11,7 +11,7 @@ final class GazePolicyConfigDetailException extends GazeOpsConfigException
     public function __construct(
         string $message,
         int $exitCode,
-        string $stderrHash,
+        ?string $stderrHash,
         private readonly ?string $detail = null,
         ?\Throwable $previous = null,
     ) {

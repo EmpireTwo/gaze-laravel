@@ -268,11 +268,10 @@ class Gaze implements AuditRunner, GazeContract
         try {
             $sessionBlob = $session->ciphertext->decryptedBlob();
         } catch (DecryptException $e) {
-            $stderrHash = hash('sha256', '');
             $exception = new GazeResponseDecodeException(
-                "gaze restore session blob could not be decrypted (exit=-1, stderr_sha256={$stderrHash})",
+                'gaze restore session blob could not be decrypted (exit=-1, stderr_sha256=none)',
                 exitCode: -1,
-                stderrHash: $stderrHash,
+                stderrHash: null,
                 previous: $e,
             );
             Log::notice('gaze restore failed', $exception->toLogContext());
@@ -402,11 +401,10 @@ class Gaze implements AuditRunner, GazeContract
             /** @var array<string, mixed> $decoded */
             $decoded = json_decode($output, true, flags: JSON_THROW_ON_ERROR);
         } catch (\JsonException $e) {
-            $stderrHash = hash('sha256', '');
             $exception = new GazeResponseDecodeException(
-                "gaze {$stage} response was not valid JSON (exit=-1, stderr_sha256={$stderrHash})",
+                "gaze {$stage} response was not valid JSON (exit=-1, stderr_sha256=none)",
                 exitCode: -1,
-                stderrHash: $stderrHash,
+                stderrHash: null,
                 previous: $e,
             );
             Log::notice("gaze {$stage} failed", $exception->toLogContext());
@@ -415,11 +413,10 @@ class Gaze implements AuditRunner, GazeContract
         }
 
         if (! is_array($decoded)) {
-            $stderrHash = hash('sha256', '');
             $exception = new GazeResponseDecodeException(
-                "gaze {$stage} response was not a JSON object (exit=-1, stderr_sha256={$stderrHash})",
+                "gaze {$stage} response was not a JSON object (exit=-1, stderr_sha256=none)",
                 exitCode: -1,
-                stderrHash: $stderrHash,
+                stderrHash: null,
             );
             Log::notice("gaze {$stage} failed", $exception->toLogContext());
 
@@ -441,11 +438,10 @@ class Gaze implements AuditRunner, GazeContract
                 ->input($input)
                 ->run($command);
         } catch (ProcessTimedOutException $e) {
-            $stderrHash = hash('sha256', '');
             $exception = new GazeTimeoutException(
-                "gaze {$stage} timed out (exit=-1, stderr_sha256={$stderrHash})",
+                "gaze {$stage} timed out (exit=-1, stderr_sha256=none)",
                 exitCode: -1,
-                stderrHash: $stderrHash,
+                stderrHash: null,
                 previous: $e,
             );
             Log::warning("gaze {$stage} failed", $exception->toLogContext());
@@ -463,20 +459,20 @@ class Gaze implements AuditRunner, GazeContract
     private function assertInput(string $text): void
     {
         if (! mb_check_encoding($text, 'UTF-8')) {
-            throw new GazeInvalidEncodingException('gaze input is not valid UTF-8', 1, hash('sha256', ''));
+            throw new GazeInvalidEncodingException('gaze input is not valid UTF-8', 1, null);
         }
 
         $this->assertInputSize($text);
 
         if ($text === '') {
-            throw new GazeEmptyInputException('gaze input must not be empty', 1, hash('sha256', ''));
+            throw new GazeEmptyInputException('gaze input must not be empty', 1, null);
         }
     }
 
     private function assertInputSize(string $input): void
     {
         if (strlen($input) > ($this->maxBytes ?? self::DEFAULT_MAX_BYTES)) {
-            throw new GazeInputTooLargeException('gaze input exceeds max_bytes pre-flight', 1, hash('sha256', ''));
+            throw new GazeInputTooLargeException('gaze input exceeds max_bytes pre-flight', 1, null);
         }
     }
 

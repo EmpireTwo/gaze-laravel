@@ -9,7 +9,7 @@ use CertaMesh\Gaze\Variant;
 
 class GazePolicyOpenException extends GazeInfraException implements NonRetryable
 {
-    public function __construct(string $message, int $exitCode, string $stderrHash, ?\Throwable $previous = null)
+    public function __construct(string $message, int $exitCode, ?string $stderrHash, ?\Throwable $previous = null)
     {
         parent::__construct($message, $exitCode, $stderrHash, Variant::PolicyOpen, $previous);
     }

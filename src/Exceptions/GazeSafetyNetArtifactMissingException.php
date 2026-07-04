@@ -24,7 +24,7 @@ final class GazeSafetyNetArtifactMissingException extends GazePolicyConfigExcept
     public function __construct(
         string $message,
         int $exitCode,
-        string $stderrHash,
+        ?string $stderrHash,
         private readonly string $backend,
         private readonly string $path,
         ?\Throwable $previous = null,

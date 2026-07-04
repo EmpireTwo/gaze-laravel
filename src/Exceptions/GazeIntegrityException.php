@@ -11,7 +11,7 @@ class GazeIntegrityException extends GazeException
     public function __construct(
         string $message,
         int $exitCode,
-        string $stderrHash,
+        ?string $stderrHash,
         ?Variant $variant = Variant::UnknownToken,
         ?\Throwable $previous = null,
     ) {

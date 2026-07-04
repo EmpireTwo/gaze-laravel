@@ -183,14 +183,15 @@ implementer today.
 them. PHP has no package-private visibility. Callers outside the package should
 treat these as unstable internal API subject to change without a major version.
 
-### L-2 — `stderrHash` is SHA256 of empty string for synthetic PHP-side errors
+### L-2 — `stderrHash` is `null` for synthetic PHP-side errors
 
 When the error originates in PHP (timeout via `ProcessTimedOutException`, JSON
-decode failure, `DecryptException`), no subprocess stderr is available. The
-`stderrHash` field in the exception and log context is always
-`e3b0c44...` (SHA256 of `""`). This is a known limitation; the `exit_code: -1`
-in the same context distinguishes these synthetic records from real subprocess
-failures.
+decode failure, `DecryptException`, pre-flight validation), no subprocess
+stderr stream ever existed. The `stderrHash` field is `null` in the exception
+and log context, and exception messages render `stderr_sha256=none`. A real
+subprocess failure that emitted nothing on stderr keeps the hash of the empty
+string (`e3b0c44...`) — the null/hash distinction separates "no stream" from
+"empty stream". `exit_code: -1` additionally marks synthetic records.
 
 ### L-3 — `EncryptedBlob` couples to Laravel's service container
 
@@ -246,9 +247,9 @@ Severity: **HIGH** / **MEDIUM** / **LOW**
 | # | File | Line | Finding |
 |---|---|---|---|
 | L-1 | `src/EncryptedBlob.php` | 30 | Static `app()` call — untestable outside Laravel boot |
-| L-2 | `src/Gaze.php` | 194, 207 | `stderrHash = hash('sha256', '')` in synthetic error contexts — see L-2 constraint above |
+| L-2 | `src/Gaze.php` | 194, 207 | ~~`stderrHash = hash('sha256', '')` in synthetic error contexts~~ — resolved: `$stderrHash` is nullable; synthetic errors carry `null` (see L-2 constraint above) |
 | L-3 | `src/Exceptions/GazeIntegrityException.php` | — | `requiresFreshClean()` method on base class + `RequiresFreshClean` marker interface on subclasses — two paths for the same semantic |
-| L-4 | `src/Exceptions/GazeBinaryMissingException.php` | 9 | `stderrHash = ''` default — deviates from convention (should be `hash('sha256', '')`) |
+| L-4 | `src/Exceptions/GazeBinaryMissingException.php` | 9 | ~~`stderrHash = ''` default — deviates from convention~~ — resolved: defaults to `null`, the convention for errors with no subprocess stderr stream |
 | L-5 | `src/Install/BinaryInstaller.php` | `alreadyInstalled()` | Version check uses `str_contains($output, $version)` — fragile if binary output format changes |
 | L-6 | `tests/Contract/VariantContractTest.php` | 15 | Docblock says "gaze v0.5.2" — stale, should reference v0.6.4 |
 | L-7 | `src/GazeSession.php` | — | `ciphertext` is `public readonly` — callers can invoke `decryptedBlob()` directly; consider a `getCiphertext()` accessor that returns only the opaque ciphertext string |

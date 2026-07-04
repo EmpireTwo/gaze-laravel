@@ -43,7 +43,7 @@ Every exception this package throws extends `CertaMesh\Gaze\Exceptions\GazeExcep
         └── NerVariantUnknownException   (exit 2 — unknown NER variant name)
 ```
 
-The `Install\Ner*` family lives under the `CertaMesh\Gaze\Install` namespace. These exceptions are produced without a `gaze` subprocess (including during `composer install`, where no Laravel app exists), so their inherited `$stderrHash` is the SHA-256 of the empty string, `$variant` is always `null`, and `isCallerBug()` is always `false`. Their `exitCode(): int` method mirrors the inherited `$exitCode` property and is the suggested process exit code for `gaze:install:ner`. None of them implement a retry contract — they never flow through `GazeRetryPolicy`.
+The `Install\Ner*` family lives under the `CertaMesh\Gaze\Install` namespace. These exceptions are produced without a `gaze` subprocess (including during `composer install`, where no Laravel app exists), so their inherited `$stderrHash` and `$variant` are always `null`, and `isCallerBug()` is always `false`. Their `exitCode(): int` method mirrors the inherited `$exitCode` property and is the suggested process exit code for `gaze:install:ner`. None of them implement a retry contract — they never flow through `GazeRetryPolicy`.
 
 ---
 
@@ -215,8 +215,8 @@ The log level for each exception family:
 [
     'exit_code'     => $e->exitCode,
     'error_variant' => $e->variant?->value, // e.g. "BlobExpired"
-    'stderr_sha256' => $e->stderrHash,      // SHA-256 of raw stderr
+    'stderr_sha256' => $e->stderrHash,      // SHA-256 of raw stderr, or null
 ]
 ```
 
-The `stderrHash` is always a SHA-256 of the raw stderr string. It never contains PII — the raw stderr itself is never logged.
+`stderrHash` is the SHA-256 of the raw stderr string when a subprocess stderr stream existed — including the hash of the empty string when the process ran but emitted nothing (a forensic fact worth recording). It is `null` when no stderr stream ever existed: pre-flight validation failures, timeouts, stdout decode failures, daemon envelope errors, and the `Install\Ner*` family. Exception messages render the null case as `stderr_sha256=none`. Either way it never contains PII — the raw stderr itself is never logged.

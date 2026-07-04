@@ -60,7 +60,7 @@ it('mirrors exitCode() in the inherited GazeException properties', function () {
     expect($e->exitCode)->toBe($e->exitCode());
     expect($e->getCode())->toBe($e->exitCode());
     expect($e->variant)->toBeNull();
-    expect($e->stderrHash)->toBe(hash('sha256', ''));
+    expect($e->stderrHash)->toBeNull();
 });
 
 it('is never classified as a caller bug and logs a safe context', function () {
@@ -70,7 +70,7 @@ it('is never classified as a caller bug and logs a safe context', function () {
     expect($e->toLogContext())->toBe([
         'exit_code' => 1,
         'error_variant' => null,
-        'stderr_sha256' => hash('sha256', ''),
+        'stderr_sha256' => null,
     ]);
 });
 

@@ -60,6 +60,24 @@ it('maps malformed clean JSON output to a non-retryable decode exception', funct
         ->and($thrown->getPrevious())->toBeInstanceOf(JsonException::class);
 });
 
+it('reports a null stderr hash for synthetic errors with no subprocess stderr stream', function () {
+    Process::fake([
+        '*' => Process::result(output: 'not-json{'),
+    ]);
+
+    try {
+        $this->makeGaze()->clean('Hello Alice');
+    } catch (GazeResponseDecodeException $e) {
+        expect($e->stderrHash)->toBeNull()
+            ->and($e->getMessage())->toContain('stderr_sha256=none')
+            ->and($e->toLogContext()['stderr_sha256'])->toBeNull();
+
+        return;
+    }
+
+    $this->fail('expected GazeResponseDecodeException');
+});
+
 it('maps malformed restore JSON output to a non-retryable decode exception', function () {
     Process::fake([
         '*' => Process::result(output: 'oops'),
