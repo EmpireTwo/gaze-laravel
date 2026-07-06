@@ -387,10 +387,21 @@ it('warns with the gaze:install --force hint when the installed binary lags PINN
 
     Process::fake(['*' => Process::result(output: "gaze 0.10.0\n")]);
 
-    $this->artisan('gaze:doctor')
-        ->assertExitCode(0)
-        ->expectsOutputToContain('but this package pins v'.BinaryDownloader::PINNED_VERSION)
-        ->expectsOutputToContain('php artisan gaze:install --force');
+    // CI exports GAZE_VERSION for the binary-install step; a set GAZE_VERSION
+    // legitimately softens the hint, so this test must scrub it to reach the
+    // --force branch.
+    $previous = getenv('GAZE_VERSION');
+    putenv('GAZE_VERSION');
+    try {
+        $this->artisan('gaze:doctor')
+            ->assertExitCode(0)
+            ->expectsOutputToContain('but this package pins v'.BinaryDownloader::PINNED_VERSION)
+            ->expectsOutputToContain('php artisan gaze:install --force');
+    } finally {
+        if ($previous !== false) {
+            putenv('GAZE_VERSION='.$previous);
+        }
+    }
 });
 
 it('softens the pin-mismatch message and drops the --force hint when GAZE_BINARY is set', function () {
