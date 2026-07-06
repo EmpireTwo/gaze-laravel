@@ -6,7 +6,7 @@ upcoming release in full; per-minor guides for earlier versions live in
 [CHANGELOG.md](CHANGELOG.md) and the upstream binary's
 [UPGRADE.md](https://github.com/CertaMesh/gaze/blob/main/UPGRADE.md).
 
-## v0.12.0 → v0.13.0 (Unreleased)
+## v0.12.0 → v0.13.0
 
 > Pre-1.0 SemVer: this breaking change lands on a MINOR bump. v0.13.0 removes
 > the Composer plugin entirely. `php artisan gaze:install` (and its
@@ -62,6 +62,16 @@ upcoming release in full; per-minor guides for earlier versions live in
    the shipped policy, which covers `custom:family:payment-card-or-iban`. If
    you maintain your own policy and see the warning in logs, add the rule it
    names (see the policy-leak sections below).
+6. **Published-policy leak fixes — action required if you published the
+   policy.** Two never-leak violations fixed in `resources/policy.toml`
+   (IBAN collision-family class, symbol-currency `money_amount` pattern). A
+   published copy in your app does NOT update itself — apply both edits; see
+   the two "Published policies" sections below.
+7. **Smaller API-surface breaks** (each detailed in its own section below):
+   `SafetyNetConfiguratorResult::$status` is now a backed enum,
+   `BinaryInstaller`'s `@internal` static shims moved to `BinaryDownloader`,
+   `InstallNerCommand` changed FQCN, `GazeException::$stderrHash` is now
+   nullable, and the `RequiresFreshClean` marker interface is deprecated.
 
 ### Safety-net config keys are now a nested `safety_net` group (flat keys deprecated)
 
@@ -150,6 +160,47 @@ new Gaze($r, $p, $app, $path, GazeOptions::fromConfig(config('gaze')));
 ```
 
 `Contracts\Gaze` (the facade / injection surface) is untouched.
+
+### `SafetyNetConfiguratorResult::$status` is now a backed enum (BREAKING)
+
+String comparisons against `'written'` / `'unchanged'` stop matching — compare
+against `CertaMesh\Gaze\Install\SafetyNetConfigStatus::Written` /
+`::Unchanged`, or use `->status->value` for the old strings. The docblocked
+`previewed` status is gone from the surface; it was never emitted.
+
+### `BinaryInstaller` slimmed to its real surface (BREAKING)
+
+The ~11 `@internal` delegating static shims (`detectTarget`,
+`alreadyInstalled`, `verifyChecksum`, `extract`, `installBinary`, …) that
+existed for the removed Composer plugin are deleted; `install()` and
+`isProductionEnvironment()` are now private. **Migration:** call the same
+methods on `BinaryDownloader`, where the pipeline actually lives. What remains
+supported on `BinaryInstaller`: `postInstall(Event)` (the opt-in Composer
+script hook), `PINNED_VERSION`, and `resolveReleaseBase()`.
+
+### `InstallNerCommand` moved namespaces (technically BREAKING)
+
+`CertaMesh\Gaze\Console\InstallNerCommand` →
+`CertaMesh\Gaze\Console\Install\InstallNerCommand`. The `gaze:install:ner`
+signature and the deprecated `gaze:install-ner` alias are unchanged — only
+code referencing the class FQCN directly needs the new import.
+
+### `GazeException::$stderrHash` is now nullable
+
+`null` means no subprocess stderr stream ever existed (pre-flight failures,
+timeouts, decode failures) — previously these presented `hash('sha256', '')`
+as a forensic hash of a stream that never was. A real subprocess failure that
+emitted nothing still carries the empty-string hash, so "no stream" and
+"empty stream" are distinguishable. If you type-hinted `$e->stderrHash` as
+`string`, treat it as `?string`; log-context keys are unchanged
+(`stderr_sha256` is `null` in the no-stream case, rendered `none` in
+messages).
+
+### `RequiresFreshClean` marker interface deprecated
+
+Branch on `$e instanceof GazeIntegrityException && $e->requiresFreshClean()`
+instead of `$e instanceof RequiresFreshClean`. The implementing exceptions
+keep the marker until 1.0, so existing `instanceof` checks continue to work.
 
 ### Optional: keep the auto-download behaviour, without the plugin
 
