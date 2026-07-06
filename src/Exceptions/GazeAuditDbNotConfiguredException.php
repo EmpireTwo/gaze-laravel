@@ -11,7 +11,7 @@ final class GazeAuditDbNotConfiguredException extends GazeCallerBugException
         parent::__construct(
             message: $message,
             exitCode: -1,
-            stderrHash: hash('sha256', ''),
+            stderrHash: null,
         );
     }
 }

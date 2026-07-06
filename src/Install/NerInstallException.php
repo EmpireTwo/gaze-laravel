@@ -13,8 +13,8 @@ use CertaMesh\Gaze\Exceptions\GazeException;
  * single catch-all surface for every exception this package throws. Install
  * failures are produced without a `gaze` subprocess (including during
  * `composer install`, where no Laravel app exists), so the inherited
- * `$stderrHash` is the SHA-256 of the empty string and `$variant` is always
- * `null`. The inherited `$exitCode` property mirrors {@see exitCode()}.
+ * `$stderrHash` and `$variant` are always `null`. The inherited `$exitCode`
+ * property mirrors {@see exitCode()}.
  */
 abstract class NerInstallException extends GazeException
 {
@@ -23,7 +23,7 @@ abstract class NerInstallException extends GazeException
         parent::__construct(
             $message,
             $this->exitCode(),
-            hash('sha256', ''),
+            null,
             null,
             $previous,
         );

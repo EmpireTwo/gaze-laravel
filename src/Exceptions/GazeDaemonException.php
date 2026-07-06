@@ -10,9 +10,8 @@ use CertaMesh\Gaze\Daemon\DaemonErrorVariant;
  * Exception thrown by the long-lived `gaze daemon` JSONL adapter.
  *
  * Daemon errors are stdout JSON envelopes — they have no stderr payload to
- * hash like the one-shot `Gaze::clean()` failures. The parent ctor still
- * receives `stderrHash = ''` so existing tooling that inspects the
- * `GazeIntegrityException` shape keeps working; `toLogContext()` is
+ * hash like the one-shot `Gaze::clean()` failures. The parent ctor receives
+ * `stderrHash = null` (no stderr stream ever existed); `toLogContext()` is
  * overridden to surface the envelope `raw` payload instead.
  *
  * This class is intentionally NOT `Retryable`: queue retry policy is the
@@ -32,11 +31,11 @@ class GazeDaemonException extends GazeIntegrityException
         public readonly DaemonErrorVariant $daemonVariant,
         ?\Throwable $previous = null,
     ) {
-        // Daemon errors have no stderr — pass an empty hash and rely on
+        // Daemon errors have no stderr — pass a null hash and rely on
         // toLogContext() for envelope-aware diagnostics. Exit code -1
         // mirrors the GazeResponseDecodeException precedent for line-
         // level errors with no upstream process exit.
-        parent::__construct($message, -1, '', null, $previous);
+        parent::__construct($message, -1, null, null, $previous);
     }
 
     public function daemonVariant(): DaemonErrorVariant

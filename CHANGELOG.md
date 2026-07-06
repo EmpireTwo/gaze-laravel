@@ -6,6 +6,22 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
 
 ### Changed
 
+- `GazeException::$stderrHash` is now nullable (`?string`). `null` means no
+  subprocess stderr stream ever existed — pre-flight validation failures,
+  timeouts, stdout decode failures, daemon envelope errors, and the
+  `Install\Ner*` family — replacing the previous convention of presenting
+  `hash('sha256', '')` (`e3b0c44...`) as a forensic hash of stderr that never
+  was. Exception messages render the null case as `stderr_sha256=none`;
+  `toLogContext()` keeps the `stderr_sha256` key with a `null` value. A real
+  subprocess failure that emitted nothing on stderr still carries the hash of
+  the empty string, so "no stream" and "empty stream" are now distinguishable.
+  If you type-hinted `$e->stderrHash` as `string`, treat it as `?string`.
+- Internal: `Gaze::buildException()` no longer hand-builds each typed
+  exception. Construction lives on the wire enum as
+  `Variant::toException(string $stage, int $exitCode, ?string $stderrHash, string $stderr = '')`,
+  backed by a one-line-per-variant `[exception class, message summary]` table,
+  so a new upstream error variant is a one-line addition. Message strings are
+  unchanged, and raw stderr still never reaches messages or log context.
 - Console-layer dedupe (no behavior change; argv assembly and command output
   are pinned byte-identical by the existing tests):
   - The `appendFlag()` / `stringOption()` / `configString()` /
@@ -26,6 +42,20 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
     anyone referencing the command class directly.
   - `gaze:install:safety-net` returns `Command::INVALID` instead of a bare
     `2` for an unknown backend (same exit code).
+
+### Deprecated
+
+- The `Queue\Contracts\RequiresFreshClean` marker interface. The
+  `GazeIntegrityException::requiresFreshClean()` method is the canonical
+  fresh-clean signal — it lives on the exception (mirroring the
+  `HasRetryDisposition` method-based pattern) and can give variant-dependent
+  answers, which a static marker cannot. Branch on
+  `$e instanceof GazeIntegrityException && $e->requiresFreshClean()` instead of
+  `$e instanceof RequiresFreshClean`. `GazeBlobExpiredException` and
+  `GazeInvalidBlobVersionException` keep implementing the marker until 1.0, so
+  existing `instanceof` checks continue to work; nothing in this package ever
+  dispatched on it (`GazeRetryPolicy` does not consult it). Resolves
+  architecture debt L-3 (two paths for the same semantic).
 
 ### Added
 

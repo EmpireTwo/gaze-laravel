@@ -29,6 +29,27 @@ it('treats empty-stderr sigpipe as a dedicated exception', function () {
     $this->makeGaze()->clean('Hello Alice');
 })->throws(GazeSigPipeException::class);
 
+it('keeps the empty-string hash for subprocess failures that emitted no stderr', function () {
+    Log::spy();
+    Process::fake([
+        '*' => Process::result(output: '', errorOutput: '', exitCode: 141),
+    ]);
+
+    try {
+        $this->makeGaze()->clean('Hello Alice');
+    } catch (GazeSigPipeException $e) {
+        // The subprocess ran and produced an (empty) stderr stream, so the
+        // forensic hash stays hash('sha256', '') — null is reserved for
+        // failures where no stderr stream ever existed.
+        expect($e->stderrHash)->toBe(hash('sha256', ''))
+            ->and($e->getMessage())->toContain('stderr_sha256='.hash('sha256', ''));
+
+        return;
+    }
+
+    $this->fail('Expected GazeSigPipeException to be thrown.');
+});
+
 it('treats non-empty-stderr sigpipe as a parsed variant', function () {
     Process::fake([
         '*' => Process::result(

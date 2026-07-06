@@ -20,7 +20,7 @@ it('accepts an envelope without a stderrHash', function () {
     expect($exception)->toBeInstanceOf(GazeException::class);
     expect($exception->getCode())->toBe(-1);
     expect($exception->exitCode)->toBe(-1);
-    expect($exception->stderrHash)->toBe('');
+    expect($exception->stderrHash)->toBeNull();
 });
 
 it('emits the envelope raw payload in toLogContext instead of stderr_sha256', function () {

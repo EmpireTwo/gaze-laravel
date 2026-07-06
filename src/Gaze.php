@@ -8,29 +8,12 @@ use CertaMesh\Gaze\Audit\AuditService;
 use CertaMesh\Gaze\Contracts\AuditRunner;
 use CertaMesh\Gaze\Contracts\Gaze as GazeContract;
 use CertaMesh\Gaze\Daemon\DaemonManager;
-use CertaMesh\Gaze\Exceptions\GazeAuditPurgeIso8601Exception;
-use CertaMesh\Gaze\Exceptions\GazeBlobExpiredException;
 use CertaMesh\Gaze\Exceptions\GazeEmptyInputException;
 use CertaMesh\Gaze\Exceptions\GazeException;
 use CertaMesh\Gaze\Exceptions\GazeInputTooLargeException;
-use CertaMesh\Gaze\Exceptions\GazeInvalidBlobVersionException;
 use CertaMesh\Gaze\Exceptions\GazeInvalidEncodingException;
-use CertaMesh\Gaze\Exceptions\GazeInvalidSignatureException;
-use CertaMesh\Gaze\Exceptions\GazeIoException;
-use CertaMesh\Gaze\Exceptions\GazePipelineException;
-use CertaMesh\Gaze\Exceptions\GazePolicyConfigDetailException;
-use CertaMesh\Gaze\Exceptions\GazePolicyConfigException;
-use CertaMesh\Gaze\Exceptions\GazePolicyOpenException;
-use CertaMesh\Gaze\Exceptions\GazePolicySchemaUnsupportedException;
 use CertaMesh\Gaze\Exceptions\GazeResponseDecodeException;
-use CertaMesh\Gaze\Exceptions\GazeSafetyNetArtifactMissingException;
-use CertaMesh\Gaze\Exceptions\GazeSafetyNetConfigException;
-use CertaMesh\Gaze\Exceptions\GazeSafetyNetFailureException;
-use CertaMesh\Gaze\Exceptions\GazeSigPipeException;
-use CertaMesh\Gaze\Exceptions\GazeStdinParseException;
 use CertaMesh\Gaze\Exceptions\GazeTimeoutException;
-use CertaMesh\Gaze\Exceptions\GazeUnknownTokenException;
-use CertaMesh\Gaze\Exceptions\GazeUnsupportedSessionScopeException;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Encryption\DecryptException;
 use Illuminate\Contracts\Process\ProcessResult;
@@ -285,11 +268,10 @@ class Gaze implements AuditRunner, GazeContract
         try {
             $sessionBlob = $session->ciphertext->decryptedBlob();
         } catch (DecryptException $e) {
-            $stderrHash = hash('sha256', '');
             $exception = new GazeResponseDecodeException(
-                "gaze restore session blob could not be decrypted (exit=-1, stderr_sha256={$stderrHash})",
+                'gaze restore session blob could not be decrypted (exit=-1, stderr_sha256=none)',
                 exitCode: -1,
-                stderrHash: $stderrHash,
+                stderrHash: null,
                 previous: $e,
             );
             Log::notice('gaze restore failed', $exception->toLogContext());
@@ -419,11 +401,10 @@ class Gaze implements AuditRunner, GazeContract
             /** @var array<string, mixed> $decoded */
             $decoded = json_decode($output, true, flags: JSON_THROW_ON_ERROR);
         } catch (\JsonException $e) {
-            $stderrHash = hash('sha256', '');
             $exception = new GazeResponseDecodeException(
-                "gaze {$stage} response was not valid JSON (exit=-1, stderr_sha256={$stderrHash})",
+                "gaze {$stage} response was not valid JSON (exit=-1, stderr_sha256=none)",
                 exitCode: -1,
-                stderrHash: $stderrHash,
+                stderrHash: null,
                 previous: $e,
             );
             Log::notice("gaze {$stage} failed", $exception->toLogContext());
@@ -432,11 +413,10 @@ class Gaze implements AuditRunner, GazeContract
         }
 
         if (! is_array($decoded)) {
-            $stderrHash = hash('sha256', '');
             $exception = new GazeResponseDecodeException(
-                "gaze {$stage} response was not a JSON object (exit=-1, stderr_sha256={$stderrHash})",
+                "gaze {$stage} response was not a JSON object (exit=-1, stderr_sha256=none)",
                 exitCode: -1,
-                stderrHash: $stderrHash,
+                stderrHash: null,
             );
             Log::notice("gaze {$stage} failed", $exception->toLogContext());
 
@@ -458,11 +438,10 @@ class Gaze implements AuditRunner, GazeContract
                 ->input($input)
                 ->run($command);
         } catch (ProcessTimedOutException $e) {
-            $stderrHash = hash('sha256', '');
             $exception = new GazeTimeoutException(
-                "gaze {$stage} timed out (exit=-1, stderr_sha256={$stderrHash})",
+                "gaze {$stage} timed out (exit=-1, stderr_sha256=none)",
                 exitCode: -1,
-                stderrHash: $stderrHash,
+                stderrHash: null,
                 previous: $e,
             );
             Log::warning("gaze {$stage} failed", $exception->toLogContext());
@@ -480,20 +459,20 @@ class Gaze implements AuditRunner, GazeContract
     private function assertInput(string $text): void
     {
         if (! mb_check_encoding($text, 'UTF-8')) {
-            throw new GazeInvalidEncodingException('gaze input is not valid UTF-8', 1, hash('sha256', ''));
+            throw new GazeInvalidEncodingException('gaze input is not valid UTF-8', 1, null);
         }
 
         $this->assertInputSize($text);
 
         if ($text === '') {
-            throw new GazeEmptyInputException('gaze input must not be empty', 1, hash('sha256', ''));
+            throw new GazeEmptyInputException('gaze input must not be empty', 1, null);
         }
     }
 
     private function assertInputSize(string $input): void
     {
         if (strlen($input) > ($this->maxBytes ?? self::DEFAULT_MAX_BYTES)) {
-            throw new GazeInputTooLargeException('gaze input exceeds max_bytes pre-flight', 1, hash('sha256', ''));
+            throw new GazeInputTooLargeException('gaze input exceeds max_bytes pre-flight', 1, null);
         }
     }
 
@@ -514,12 +493,10 @@ class Gaze implements AuditRunner, GazeContract
         $exitCode = $result->exitCode() ?? -1;
         $stderrHash = hash('sha256', $stderr);
 
+        // Empty-stderr SIGPIPE is expected when a downstream reader closes the
+        // pipe early — log at debug, not at the variant's normal level.
         if ($exitCode === 141 && $stderr === '') {
-            $exception = new GazeSigPipeException(
-                "gaze {$stage} terminated by SIGPIPE (exit=141, stderr_sha256={$stderrHash})",
-                141,
-                $stderrHash,
-            );
+            $exception = Variant::SigPipe->toException($stage, 141, $stderrHash);
             Log::debug("gaze {$stage} failed", $exception->toLogContext());
 
             return $exception;
@@ -527,132 +504,11 @@ class Gaze implements AuditRunner, GazeContract
 
         // Non-empty stderr on exit 141 still goes through the normal stderr
         // safelist parser so upstream can surface a typed variant if it emits one.
-        $variant = Variant::tryFromStderr($stderr, $exitCode);
-        $exception = match ($variant) {
-            Variant::StdinParse => new GazeStdinParseException(
-                "gaze {$stage} stdin parse failed (exit={$exitCode}, stderr_sha256={$stderrHash})",
-                $exitCode,
-                $stderrHash,
-            ),
-            Variant::EmptyInput => new GazeEmptyInputException(
-                "gaze {$stage} input was empty (exit={$exitCode}, stderr_sha256={$stderrHash})",
-                $exitCode,
-                $stderrHash,
-            ),
-            Variant::InputTooLarge => new GazeInputTooLargeException(
-                "gaze {$stage} input exceeded max bytes (exit={$exitCode}, stderr_sha256={$stderrHash})",
-                $exitCode,
-                $stderrHash,
-            ),
-            Variant::InvalidEncoding => new GazeInvalidEncodingException(
-                "gaze {$stage} input encoding invalid (exit={$exitCode}, stderr_sha256={$stderrHash})",
-                $exitCode,
-                $stderrHash,
-            ),
-            Variant::PolicyConfig => new GazePolicyConfigException(
-                "gaze {$stage} policy configuration invalid (exit={$exitCode}, stderr_sha256={$stderrHash})",
-                $exitCode,
-                $stderrHash,
-            ),
-            Variant::PolicyConfigDetail => new GazePolicyConfigDetailException(
-                "gaze {$stage} policy configuration invalid (exit={$exitCode}, stderr_sha256={$stderrHash})",
-                $exitCode,
-                $stderrHash,
-                $this->stderrStringField($stderr, 'detail'),
-            ),
-            Variant::PolicySchemaUnsupported => new GazePolicySchemaUnsupportedException(
-                "gaze {$stage} policy schema version unsupported (exit={$exitCode}, stderr_sha256={$stderrHash})",
-                $exitCode,
-                $stderrHash,
-                $this->stderrStringField($stderr, 'found') ?? '',
-                $this->stderrStringField($stderr, 'supported') ?? '',
-            ),
-            Variant::SafetyNetConfig => new GazeSafetyNetConfigException(
-                "gaze {$stage} safety-net configuration invalid (exit={$exitCode}, stderr_sha256={$stderrHash})",
-                $exitCode,
-                $stderrHash,
-            ),
-            Variant::SafetyNet => new GazeSafetyNetFailureException(
-                "gaze {$stage} safety-net failed (exit={$exitCode}, stderr_sha256={$stderrHash})",
-                $exitCode,
-                $stderrHash,
-                $this->stderrStringField($stderr, 'variant') ?? 'Other',
-            ),
-            Variant::SafetyNetArtifactMissing => new GazeSafetyNetArtifactMissingException(
-                "gaze {$stage} safety-net artifact missing (exit={$exitCode}, stderr_sha256={$stderrHash})",
-                $exitCode,
-                $stderrHash,
-                $this->stderrStringField($stderr, 'backend') ?? '',
-                $this->stderrStringField($stderr, 'path') ?? '',
-            ),
-            Variant::AuditPurgeIso8601 => new GazeAuditPurgeIso8601Exception(
-                "gaze {$stage} audit purge timestamp not ISO8601 (exit={$exitCode}, stderr_sha256={$stderrHash})",
-                $exitCode,
-                $stderrHash,
-            ),
-            Variant::UnknownToken => new GazeUnknownTokenException(
-                "gaze {$stage} encountered unknown token (exit={$exitCode}, stderr_sha256={$stderrHash})",
-                $exitCode,
-                $stderrHash,
-            ),
-            Variant::UnsupportedSessionScope => new GazeUnsupportedSessionScopeException(
-                "gaze {$stage} session scope unsupported (exit={$exitCode}, stderr_sha256={$stderrHash})",
-                $exitCode,
-                $stderrHash,
-                $this->stderrStringField($stderr, 'variant') ?? '',
-            ),
-            Variant::InvalidSignature => new GazeInvalidSignatureException(
-                "gaze {$stage} session signature invalid (exit={$exitCode}, stderr_sha256={$stderrHash})",
-                $exitCode,
-                $stderrHash,
-            ),
-            Variant::InvalidBlobVersion => new GazeInvalidBlobVersionException(
-                "gaze {$stage} blob version invalid (exit={$exitCode}, stderr_sha256={$stderrHash})",
-                $exitCode,
-                $stderrHash,
-            ),
-            Variant::BlobExpired => new GazeBlobExpiredException(
-                "gaze {$stage} blob expired (exit={$exitCode}, stderr_sha256={$stderrHash})",
-                $exitCode,
-                $stderrHash,
-            ),
-            Variant::Pipeline => new GazePipelineException(
-                "gaze {$stage} pipeline failed (exit={$exitCode}, stderr_sha256={$stderrHash})",
-                $exitCode,
-                $stderrHash,
-            ),
-            Variant::Io => new GazeIoException(
-                "gaze {$stage} I/O failed (exit={$exitCode}, stderr_sha256={$stderrHash})",
-                $exitCode,
-                $stderrHash,
-            ),
-            Variant::SigPipe => new GazeSigPipeException(
-                "gaze {$stage} terminated by SIGPIPE (exit={$exitCode}, stderr_sha256={$stderrHash})",
-                $exitCode,
-                $stderrHash,
-            ),
-            Variant::PolicyOpen => new GazePolicyOpenException(
-                "gaze {$stage} policy open failed (exit={$exitCode}, stderr_sha256={$stderrHash})",
-                $exitCode,
-                $stderrHash,
-            ),
-        };
+        $exception = Variant::tryFromStderr($stderr, $exitCode)
+            ->toException($stage, $exitCode, $stderrHash, $stderr);
 
         Log::{$exception->logLevel()}("gaze {$stage} failed", $exception->toLogContext());
 
         return $exception;
-    }
-
-    private function stderrStringField(string $stderr, string $field): ?string
-    {
-        $decoded = json_decode($stderr, true);
-
-        if (! is_array($decoded)) {
-            return null;
-        }
-
-        $value = $decoded[$field] ?? null;
-
-        return is_string($value) ? $value : null;
     }
 }
