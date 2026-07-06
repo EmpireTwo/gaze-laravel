@@ -6,6 +6,26 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
 
 ### Added
 
+- Fluent `Gaze::fake()` configuration, mirroring the `Http::fake()` idiom:
+  `cleanUsing()`, `maskUsing()` (net-new seam — `mask()` previously had no
+  handler), `restoreUsing()`, `auditPurgeUsing()`, `auditExportUsing()`, and
+  `daemonCleanUsing()` script each verb by chaining off the returned fake;
+  every positional constructor closure now has a fluent twin. Additive — the
+  positional-closure constructor keeps working, and a fluent call simply
+  replaces the corresponding handler.
+- `Gaze::fake()->failWith(GazeException $e)` simulates a broken binary:
+  `clean()`, `mask()`, `restore()`, and `daemon()->clean()` throw the given
+  exception *after* recording the call, so failure-path tests can still assert
+  the service was reached. Takes precedence over scripted handlers.
+- `Gaze::fake()->withAuditRows()` / `->withSafetyNetRows()` seed the rows that
+  `audit()->query()->execute()` and `audit()->safetyNetQuery()->execute()`
+  return (previously unreachable: the fake builders accepted rows but
+  `FakeAuditService` always constructed them empty). Rows use the real
+  builders' TSV positional-list shape; filters remain no-op recorders.
+- `FakeTokenizer`'s token grammar is now composed from named, per-branch
+  commented alternation parts (behaviour byte-identical, pinned by a
+  per-branch parity dataset).
+
 - `gaze:doctor` now flags a stale pinned binary (north-star P7, "doctor before
   failure"). It parses the installed binary's `--version` and compares it against
   `BinaryDownloader::PINNED_VERSION`; on a mismatch it adds a `pinned version`
