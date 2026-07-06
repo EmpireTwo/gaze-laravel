@@ -55,6 +55,13 @@ upcoming release in full; per-minor guides for earlier versions live in
    or `GAZE_VERSION` (a version you pinned yourself). So after a pin bump doctor
    surfaces the gap instead of silently passing — re-run
    `php artisan gaze:install --force` to clear it.
+5. **Binary pin `0.11.3` → `0.12.0`** — pure pin-forward, no adopter action
+   beyond `php artisan gaze:install --force` (see §3). No CLI contract change;
+   the new binary adds a stderr warning on `gaze clean` when a policy leaves a
+   collision-family fallback class uncovered (upstream #360) — unreachable with
+   the shipped policy, which covers `custom:family:payment-card-or-iban`. If
+   you maintain your own policy and see the warning in logs, add the rule it
+   names (see the policy-leak sections below).
 
 ### Safety-net config keys are now a nested `safety_net` group (flat keys deprecated)
 

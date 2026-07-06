@@ -1,6 +1,6 @@
 # Upstream Coverage
 
-Living parity checklist for upstream `CertaMesh/gaze` v0.11.3.
+Living parity checklist for upstream `CertaMesh/gaze` v0.12.0.
 
 > Adopter usage: [docs/safety-net.md](../how-to/safety-net.md). Why surfaces land here vs. defer: [docs/NORTH_STAR.md](../NORTH_STAR.md) (surface promotion rule). GDPR posture for these surfaces (pseudonymization, storage limitation, erasure): [docs/explanation/gdpr.md](../explanation/gdpr.md) — adopter guidance, not legal advice.
 
@@ -362,6 +362,20 @@ verdict vocabulary as above.
 | Proxy PII-surface + email-TLD recognizer hardening | passthrough | PATCH | Correctness fixes inside the binary; nothing to forward. |
 | `gaze setup` (one-command onboarding: NER install + policy + doctor) | **defer** | none | The Laravel onboarding path is already covered by `php artisan gaze:install` / `gaze:install:ner` + `gaze:doctor`, which additionally handle the adapter-side pieces (config publish, binary pin) that upstream `setup` knows nothing about. Delegating those artisans to `gaze setup` internally is a future option, not a gap. |
 | TokenBridge: encrypted indexes at rest (ChaCha20-Poly1305, `GAZE_INDEX_KEY`, `os-keychain`), `gaze index ingest --on-residual redact\|strict`, real error detail | **defer** | none | Removes the plaintext-PII blocker from the v0.11.1 adjudication; the surface is now a **promotion candidate** — see the re-adjudicated entry in [Deferred](#deferred). |
+
+## Upstream v0.11.3 → v0.12.0 deltas
+
+Gap analysis for the v0.12.0 pin bump (upstream released 2026-07-06). Verified
+against the real 0.12.0 macOS arm64 binary (sha256-pinned): every `gaze --help`
+and subcommand-help contract snapshot is **byte-identical to v0.11.3** (modulo
+the binary name in the usage line) — no new, changed, or removed flag, so there
+is **no surface to promote**. Same verdict vocabulary as above.
+
+| Upstream change | Verdict | Adapter SemVer | Notes |
+|---|---|---|---|
+| `gaze clean` warns on stderr when an uncovered collision-family class would silently leak (upstream #360 / PR #362) | passthrough | PATCH | Fires only on the success path; the adapter reads stderr exclusively on failure (`buildException`), so nothing chokes. Verified: silent against the shipped `resources/policy.toml` (covers `custom:family:payment-card-or-iban` since #151), fires against an uncovered probe policy. Surfacing it via `gaze:doctor`/`gaze:check` is a promotion candidate, not a gap — the shipped policy makes the warning unreachable for default installs. |
+| `gaze_assembly::uncovered_collision_family_classes` — new Rust library API (upstream PR #362) | **defer** | none | Rust-embedding surface; the PHP adapter consumes the CLI, not the crates. Revisit if upstream exposes it as a CLI subverb (e.g. `gaze policy lint`). |
+| Policy-authoring docs: collision-family contract + `\b`-next-to-symbol pitfall (upstream PRs #362, #363); CI drift gate now `--verify-ack` | passthrough | none | Process/docs hardening; nothing to forward. The `\b` guidance is already applied to the shipped policy (#152). |
 
 ## Upstream v0.11.2 → v0.11.3 deltas
 

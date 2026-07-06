@@ -4,6 +4,21 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
 
 ## [Unreleased]
 
+### Changed
+
+- **Binary pin bumped `0.11.3` → `0.12.0`** (upstream released 2026-07-06).
+  Pure pin-forward: every `gaze --help` / subcommand contract is byte-identical
+  to 0.11.3, so no adapter surface changes. What the new binary brings:
+  `gaze clean` now warns on stderr when a policy leaves a collision-family
+  fallback class uncovered (upstream #360 / PR #362 — the systemic guard behind
+  our #141 IBAN leak). The warning is unreachable with the shipped
+  `resources/policy.toml` (it covers the family class since #151) and fires
+  only on the success path, which the adapter's stderr handling never reads.
+  Verified against the real sha256-pinned 0.12.0 binary: full suite green,
+  version contract snapshot updated. See
+  [docs/reference/upstream-coverage.md](docs/reference/upstream-coverage.md)
+  for the delta adjudication.
+
 ### Changed (BREAKING)
 
 - **`Gaze::__construct` now takes a `GazeOptions` value object.** The 29-scalar
