@@ -4,6 +4,29 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
 
 ## [Unreleased]
 
+### Changed
+
+- Console-layer dedupe (no behavior change; argv assembly and command output
+  are pinned byte-identical by the existing tests):
+  - The `appendFlag()` / `stringOption()` / `configString()` /
+    `configNumericString()` argv helpers, previously duplicated across the
+    proxy, daemon and install command families, now live in one shared
+    `CertaMesh\Gaze\Console\Concerns\BuildsBinaryArgv` trait.
+  - `ProxyCommand` gained shared `launchFlags()` / `stopFlags()` assemblies
+    (deduping `serve`/`start` and `stop`/`restart`) plus a `successExitCode()`
+    hook so `gaze:proxy:status` no longer re-implements `runProcess()` just to
+    remap the final exit code.
+  - `gaze:check` and `gaze:doctor` now share their binary / version / encrypter
+    probes via `CertaMesh\Gaze\Console\Concerns\RunsHealthProbes` (check was a
+    strict subset of doctor); output text is unchanged.
+  - `InstallNerCommand` moved from `CertaMesh\Gaze\Console` to
+    `CertaMesh\Gaze\Console\Install` alongside the other install commands.
+    The `gaze:install:ner` signature and the deprecated `gaze:install-ner`
+    alias are unchanged, but the FQCN change is technically breaking for
+    anyone referencing the command class directly.
+  - `gaze:install:safety-net` returns `Command::INVALID` instead of a bare
+    `2` for an unknown backend (same exit code).
+
 ### Added
 
 - Fluent `Gaze::fake()` configuration, mirroring the `Http::fake()` idiom:

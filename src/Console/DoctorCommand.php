@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace CertaMesh\Gaze\Console;
 
 use CertaMesh\Gaze\BinaryResolver;
-use CertaMesh\Gaze\Exceptions\GazeBinaryMissingException;
+use CertaMesh\Gaze\Console\Concerns\RunsHealthProbes;
 use CertaMesh\Gaze\Gaze;
 use CertaMesh\Gaze\Install\BinaryDownloader;
 use CertaMesh\Gaze\Install\KijiArtifacts;
@@ -16,34 +16,25 @@ use Illuminate\Process\Factory as ProcessFactory;
 
 final class DoctorCommand extends Command
 {
+    use RunsHealthProbes;
+
     protected $signature = 'gaze:doctor {--deep : Run a clean/restore smoke test}';
 
     protected $description = 'Verify binary, policy, encrypter, and optional round-trip readiness.';
 
     public function handle(BinaryResolver $resolver, ProcessFactory $process, ConfigRepository $config, Gaze $gaze): int
     {
-        try {
-            $binary = $resolver->resolve();
-        } catch (GazeBinaryMissingException $e) {
-            $this->components->twoColumnDetail('binary', '<fg=red>missing</>');
-            $this->components->twoColumnDetail('status', '<fg=red>FAIL</>');
-            $this->line($e->getMessage());
-
+        $binary = $this->probeBinary($resolver);
+        if ($binary === null) {
             return self::FAILURE;
         }
 
-        $this->components->twoColumnDetail('binary', $binary);
-
-        $version = $process->newPendingProcess()->timeout(5)->run([$binary, '--version']);
-        if (! $version->successful()) {
-            $this->components->twoColumnDetail('version', '<fg=red>unknown</>');
-            $this->components->twoColumnDetail('status', '<fg=red>FAIL</>');
-
+        $versionOutput = $this->probeVersion($binary, $process);
+        if ($versionOutput === null) {
             return self::FAILURE;
         }
 
-        $this->components->twoColumnDetail('version', trim($version->output()));
-        $this->warnOnPinnedVersionMismatch($version->output(), $config);
+        $this->warnOnPinnedVersionMismatch($versionOutput, $config);
 
         $policy = (string) $config->get('gaze.policy_path', '');
         $this->components->twoColumnDetail('policy', is_file($policy) ? $policy : '<fg=red>missing</>');
@@ -63,11 +54,10 @@ final class DoctorCommand extends Command
             return self::FAILURE;
         }
 
-        try {
-            $this->laravel->make('gaze.encrypter');
-        } catch (\Throwable $e) {
+        $encrypterFailure = $this->probeEncrypter();
+        if ($encrypterFailure !== null) {
             $this->components->twoColumnDetail('encrypter', '<fg=red>invalid</>');
-            $this->line($e->getMessage());
+            $this->line($encrypterFailure->getMessage());
             $this->components->twoColumnDetail('status', '<fg=red>FAIL</>');
 
             return self::FAILURE;

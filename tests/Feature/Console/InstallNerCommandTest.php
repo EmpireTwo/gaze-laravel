@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use CertaMesh\Gaze\Console\InstallNerCommand;
+use CertaMesh\Gaze\Console\Install\InstallNerCommand;
 use CertaMesh\Gaze\Install\NerArtifactSet;
 use CertaMesh\Gaze\Install\NerFetcher;
 use CertaMesh\Gaze\Install\NerInstaller;
