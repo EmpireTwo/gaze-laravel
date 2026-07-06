@@ -4,20 +4,7 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
 
 ## [Unreleased]
 
-### Changed
-
-- **Binary pin bumped `0.11.3` → `0.12.0`** (upstream released 2026-07-06).
-  Pure pin-forward: every `gaze --help` / subcommand contract is byte-identical
-  to 0.11.3, so no adapter surface changes. What the new binary brings:
-  `gaze clean` now warns on stderr when a policy leaves a collision-family
-  fallback class uncovered (upstream #360 / PR #362 — the systemic guard behind
-  our #141 IBAN leak). The warning is unreachable with the shipped
-  `resources/policy.toml` (it covers the family class since #151) and fires
-  only on the success path, which the adapter's stderr handling never reads.
-  Verified against the real sha256-pinned 0.12.0 binary: full suite green,
-  version contract snapshot updated. See
-  [docs/reference/upstream-coverage.md](docs/reference/upstream-coverage.md)
-  for the delta adjudication.
+## [0.13.0] - 2026-07-06
 
 ### Changed (BREAKING)
 
@@ -44,7 +31,39 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
   runs. **Migration:** none for normal apps; if you called
   `$provider->provides()` directly (unlikely), drop the call.
 
+- `SafetyNetConfiguratorResult::$status` is now the backed enum
+  `CertaMesh\Gaze\Install\SafetyNetConfigStatus: string { Written = 'written';
+  Unchanged = 'unchanged' }` instead of a bare string. The docblocked
+  `previewed` status is gone from the surface — it was never emitted
+  (`--print` never constructs a result). **Migration:** compare against
+  `SafetyNetConfigStatus::Written` / `::Unchanged` (or `->status->value` for
+  the old strings). Pre-1.0 breaking-on-MINOR per SemVer policy.
+- `BinaryInstaller` is slimmed to its real post-plugin surface:
+  `postInstall(Event)` (the documented opt-in `post-install-cmd` /
+  `post-update-cmd` script hook), `PINNED_VERSION`, and the
+  Composer-trust-context `resolveReleaseBase()`. The ~11 `@internal`
+  delegating static shims (`detectTarget`, `alreadyInstalled`,
+  `verifyChecksum`, `extract`, `installBinary`, `deriveGithubRepo`,
+  `buildRequestHeaders`, `extractAssetIds`, `parseStatusAndLocation`,
+  `stripAuthOnCrossHost`, `resolveLocation`) that existed for the removed
+  Composer plugin's call sites are deleted; `install()` and
+  `isProductionEnvironment()` are now private. **Migration:** call the same
+  methods on `BinaryDownloader`, where the pipeline actually lives.
+
 ### Changed
+
+- **Binary pin bumped `0.11.3` → `0.12.0`** (upstream released 2026-07-06).
+  Pure pin-forward: every `gaze --help` / subcommand contract is byte-identical
+  to 0.11.3, so no adapter surface changes. What the new binary brings:
+  `gaze clean` now warns on stderr when a policy leaves a collision-family
+  fallback class uncovered (upstream #360 / PR #362 — the systemic guard behind
+  our #141 IBAN leak). The warning is unreachable with the shipped
+  `resources/policy.toml` (it covers the family class since #151) and fires
+  only on the success path, which the adapter's stderr handling never reads.
+  Verified against the real sha256-pinned 0.12.0 binary: full suite green,
+  version contract snapshot updated. See
+  [docs/reference/upstream-coverage.md](docs/reference/upstream-coverage.md)
+  for the delta adjudication.
 
 - The shipped `config/gaze.php` groups the ~14 flat safety-net / OPF / Kiji
   root keys into one nested `'safety_net' => [...]` group (with
@@ -69,8 +88,6 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
   queue payloads never embed the raw encryption key — and decryption after a
   round-trip lazily re-resolves the bound encrypter. Payloads serialized by
   earlier package versions still unserialize (legacy property-shape fallback).
-
-### Changed
 
 - `GazeException::$stderrHash` is now nullable (`?string`). `null` means no
   subprocess stderr stream ever existed — pre-flight validation failures,
@@ -109,6 +126,13 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
   - `gaze:install:safety-net` returns `Command::INVALID` instead of a bare
     `2` for an unknown backend (same exit code).
 
+- `EncryptedBlob::fromCiphertext()` is now documented as **supported public
+  API** — the rehydration point for adopters persisting a session's
+  already-encrypted blob across requests (persist
+  `$session->ciphertext->ciphertext()`, rebuild later with
+  `EncryptedBlob::fromCiphertext($stored)`). Behaviour is unchanged; a feature
+  test now pins the persisted-ciphertext round-trip.
+
 ### Deprecated
 
 - The `Queue\Contracts\RequiresFreshClean` marker interface. The
@@ -122,6 +146,41 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
   existing `instanceof` checks continue to work; nothing in this package ever
   dispatched on it (`GazeRetryPolicy` does not consult it). Resolves
   architecture debt L-3 (two paths for the same semantic).
+
+### Removed (BREAKING)
+
+- The Composer plugin (`CertaMesh\Gaze\Install\GazeInstallerPlugin`) is removed
+  and the package `type` reverts from `composer-plugin` to `library`. The binary
+  no longer auto-downloads on `composer install` / `composer update`;
+  `php artisan gaze:install` (or the `gaze:install:binary` sub-command) is now
+  the only provisioning path — explicit over magic, and no `allow-plugins`
+  friction on first install. **Migration:** delete the now-inert
+  `config.allow-plugins."certamesh/gaze-laravel"` key from your app's
+  `composer.json` and run `php artisan gaze:install` after upgrading. Binary pin
+  bumps now require an explicit `gaze:install --force`; `gaze:doctor` now warns
+  (with a `gaze:install --force` hint) when the installed version lags the pin
+  but still does not fail on it. Adopters who want the old
+  auto-download behaviour can wire `CertaMesh\Gaze\Install\BinaryInstaller::postInstall`
+  into a Composer `post-update-cmd` script (honours `GAZE_SKIP_BINARY_DOWNLOAD`).
+  `BinaryDownloader` and everything `gaze:install` uses are unchanged — only
+  the plugin trigger is gone (but see *Changed (BREAKING)* above:
+  `BinaryInstaller`'s plugin-era delegating shims are also removed this
+  release). Removed the `composer-plugin-api`
+  requirement and the `extra.class` plugin declaration. See
+  [UPGRADING.md](UPGRADING.md) (`v0.12.0 → v0.13.0`) for the full guide.
+
+### Removed
+
+- `BinaryDownloader::extract()` and the `.tar.gz` branch of `installBinary()`.
+  The pipeline names assets `gaze-{target}` (never an archive), so the branch
+  was unreachable; the pinned upstream release ships raw binaries plus
+  `.sha256` sidecars only. The now-unused `ext-phar` platform requirement is
+  dropped from `composer.json`.
+- `NerManifest::fromFile()` — zero callers; manifests only ever arrive via
+  `fromUrl()` / `fromString()`.
+- `resources/ner/policy-snippet.davlan-mbert.toml` — orphaned since
+  `PolicyTomlPatcher` began generating the `[ner]` block programmatically;
+  never listed in `NerManifest::FILES`, never copied by the fetcher.
 
 ### Added
 
@@ -200,73 +259,6 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
   the shared pipeline keys (`gaze.locale`, `gaze.ner_threshold`, and the whole
   safety-net / OpenAI-filter / Kiji family) when the daemon was spawned via the
   facade instead of `gaze:daemon:serve`.
-
-### Changed
-
-- `EncryptedBlob::fromCiphertext()` is now documented as **supported public
-  API** — the rehydration point for adopters persisting a session's
-  already-encrypted blob across requests (persist
-  `$session->ciphertext->ciphertext()`, rebuild later with
-  `EncryptedBlob::fromCiphertext($stored)`). Behaviour is unchanged; a feature
-  test now pins the persisted-ciphertext round-trip.
-
-### Changed (BREAKING)
-
-- `SafetyNetConfiguratorResult::$status` is now the backed enum
-  `CertaMesh\Gaze\Install\SafetyNetConfigStatus: string { Written = 'written';
-  Unchanged = 'unchanged' }` instead of a bare string. The docblocked
-  `previewed` status is gone from the surface — it was never emitted
-  (`--print` never constructs a result). **Migration:** compare against
-  `SafetyNetConfigStatus::Written` / `::Unchanged` (or `->status->value` for
-  the old strings). Pre-1.0 breaking-on-MINOR per SemVer policy.
-- `BinaryInstaller` is slimmed to its real post-plugin surface:
-  `postInstall(Event)` (the documented opt-in `post-install-cmd` /
-  `post-update-cmd` script hook), `PINNED_VERSION`, and the
-  Composer-trust-context `resolveReleaseBase()`. The ~11 `@internal`
-  delegating static shims (`detectTarget`, `alreadyInstalled`,
-  `verifyChecksum`, `extract`, `installBinary`, `deriveGithubRepo`,
-  `buildRequestHeaders`, `extractAssetIds`, `parseStatusAndLocation`,
-  `stripAuthOnCrossHost`, `resolveLocation`) that existed for the removed
-  Composer plugin's call sites are deleted; `install()` and
-  `isProductionEnvironment()` are now private. **Migration:** call the same
-  methods on `BinaryDownloader`, where the pipeline actually lives.
-
-### Removed
-
-- `BinaryDownloader::extract()` and the `.tar.gz` branch of `installBinary()`.
-  The pipeline names assets `gaze-{target}` (never an archive), so the branch
-  was unreachable; the pinned upstream release ships raw binaries plus
-  `.sha256` sidecars only. The now-unused `ext-phar` platform requirement is
-  dropped from `composer.json`.
-- `NerManifest::fromFile()` — zero callers; manifests only ever arrive via
-  `fromUrl()` / `fromString()`.
-- `resources/ner/policy-snippet.davlan-mbert.toml` — orphaned since
-  `PolicyTomlPatcher` began generating the `[ner]` block programmatically;
-  never listed in `NerManifest::FILES`, never copied by the fetcher.
-
-### Removed (BREAKING)
-
-- The Composer plugin (`CertaMesh\Gaze\Install\GazeInstallerPlugin`) is removed
-  and the package `type` reverts from `composer-plugin` to `library`. The binary
-  no longer auto-downloads on `composer install` / `composer update`;
-  `php artisan gaze:install` (or the `gaze:install:binary` sub-command) is now
-  the only provisioning path — explicit over magic, and no `allow-plugins`
-  friction on first install. **Migration:** delete the now-inert
-  `config.allow-plugins."certamesh/gaze-laravel"` key from your app's
-  `composer.json` and run `php artisan gaze:install` after upgrading. Binary pin
-  bumps now require an explicit `gaze:install --force`; `gaze:doctor` now warns
-  (with a `gaze:install --force` hint) when the installed version lags the pin
-  but still does not fail on it. Adopters who want the old
-  auto-download behaviour can wire `CertaMesh\Gaze\Install\BinaryInstaller::postInstall`
-  into a Composer `post-update-cmd` script (honours `GAZE_SKIP_BINARY_DOWNLOAD`).
-  `BinaryDownloader` and everything `gaze:install` uses are unchanged — only
-  the plugin trigger is gone (but see *Changed (BREAKING)* above:
-  `BinaryInstaller`'s plugin-era delegating shims are also removed this
-  release). Removed the `composer-plugin-api`
-  requirement and the `extra.class` plugin declaration. See
-  [UPGRADING.md](UPGRADING.md) (`v0.12.0 → v0.13.0`) for the full guide.
-
-### Fixed
 
 - Tests: the integration behavior pins (`PublishedPolicyTest`, `PolicyRegexBoundaryTest`)
   no longer perma-skip on a stale `0.5.x` version sniff — they now gate on
