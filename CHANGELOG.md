@@ -157,6 +157,16 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
 
 ### Fixed
 
+- **The published `resources/policy.toml` no longer leaks IBANs against the
+  pinned binary v0.11.3** (#141). Upstream ≥ 0.11.x emits IBAN/credit-card
+  spans whose collision cannot be resolved under the fail-closed family class
+  `custom:family:payment-card-or-iban` instead of `custom:iban` /
+  `custom:credit_card`; the policy had no rule for it, and the `preserve`
+  default let IBANs through unredacted. A `tokenize` rule for the family class
+  closes the leak (upstream contract question tracked in CertaMesh/gaze#360).
+  Adopters with a published policy should add the same rule — see UPGRADING.md.
+  The symbol-currency (`5000€` / `$3,500.00`) leak from #141 is still open,
+  pending the upstream `\b` semantics verdict (CertaMesh/gaze#361).
 - The `Gaze::daemon()` facade spawn path now forwards the **full** daemon flag
   surface. Previously it assembled only `--policy`, `--idle-timeout`, and
   `--audit-db`, silently dropping configured `gaze.daemon.session_idle_timeout_s`,

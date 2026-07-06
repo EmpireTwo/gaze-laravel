@@ -164,6 +164,30 @@ before on this path. Note: the `gaze:install:binary` artisan command does **not*
 honour `GAZE_SKIP_BINARY_DOWNLOAD` — that toggle is specific to the Composer
 script/installer path shown here.
 
+### Published policies: add the `payment-card-or-iban` family rule (leak fix)
+
+Upstream gaze ≥ 0.11.x emits IBAN/credit-card detections whose collision it
+cannot resolve (for example when no locale anchor cue is loaded) under the
+fail-closed family class `custom:family:payment-card-or-iban` instead of
+`custom:iban` / `custom:credit_card`. A policy that only rules on the old
+class names — with the usual `preserve` default — lets those IBANs through
+**unredacted**.
+
+The shipped `resources/policy.toml` now carries the rule. If you published the
+policy into your app (`vendor:publish` or `gaze:install`), add it to your copy:
+
+```toml
+[[rule]]
+kind = "class"
+class = "custom:family:payment-card-or-iban"
+action = "tokenize"
+```
+
+Whether the family class name is a stable upstream contract is tracked in
+[CertaMesh/gaze#360](https://github.com/CertaMesh/gaze/issues/360); the
+related symbol-currency (`5000€`, `$3,500.00`) leak is still open pending
+[CertaMesh/gaze#361](https://github.com/CertaMesh/gaze/issues/361).
+
 ## v0.11.1 → v0.12.0
 
 > Pre-1.0 SemVer: breaking changes land on a MINOR bump. v0.12.0 carries two
