@@ -18,9 +18,9 @@ use Symfony\Component\Process\Process;
  *
  * This single class owns the checksum, redirect, and cross-host auth-strip
  * logic so there is exactly one security-critical download path shared by the
- * Composer plugin ({@see BinaryInstaller}) and the `gaze:install:binary`
- * artisan command. The `https://`-per-hop recheck and the cross-host
- * Authorization strip were moved here verbatim.
+ * opt-in Composer script hook ({@see BinaryInstaller::postInstall()}) and the
+ * `gaze:install:binary` artisan command. The `https://`-per-hop recheck and
+ * the cross-host Authorization strip were moved here verbatim.
  *
  * Not `final`: the artisan commands inject this via the container and tests
  * substitute a subclass stub, so the download pipeline can be exercised without
@@ -219,24 +219,13 @@ class BinaryDownloader
         }
     }
 
-    public static function extract(string $tarPath, string $binDir): void
-    {
-        $phar = new \PharData($tarPath);
-        $gzPath = substr($tarPath, 0, -3); // .tar
-        $phar->decompress();
-        $tar = new \PharData($gzPath);
-        $tar->extractTo($binDir, null, true);
-        @unlink($gzPath);
-    }
-
+    /**
+     * Upstream release assets are raw binaries named `gaze-{target}` (no
+     * archive wrapper — verified against the pinned release's asset list), so
+     * installing is a plain copy of the checksum-verified download.
+     */
     public static function installBinary(string $assetPath, string $binPath): void
     {
-        if (str_ends_with($assetPath, '.tar.gz')) {
-            self::extract($assetPath, dirname($binPath));
-
-            return;
-        }
-
         if (@copy($assetPath, $binPath) === false) {
             throw new \RuntimeException("could not write {$binPath}");
         }

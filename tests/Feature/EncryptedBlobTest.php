@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use CertaMesh\Gaze\EncryptedBlob;
+use CertaMesh\Gaze\GazeSession;
 use Illuminate\Encryption\Encrypter;
 
 it('uses the host cipher for the dedicated encryption key path', function () {
@@ -48,4 +49,31 @@ it('round-trips a dedicated-key blob across separate config instances under AES-
     $restored = EncryptedBlob::fromCiphertext($ciphertext)->decryptedBlob();
 
     expect($restored)->toBe($original);
+});
+
+it('rehydrates a persisted session blob via fromCiphertext (supported cross-request path)', function () {
+    // Request 1 — clean produced a session; the adopter persists the already-
+    // encrypted ciphertext string (e.g. a DB column) plus the clean text.
+    $sessionBlob = base64_encode(gl_jsonEncode(['text' => 'alice@example.com']));
+    $session = new GazeSession(
+        cleanText: 'Email_1',
+        ciphertext: EncryptedBlob::wrap($sessionBlob),
+        detections: 1,
+    );
+
+    $persistedCiphertext = $session->ciphertext->ciphertext();
+
+    // The persisted string is opaque — never the plaintext blob.
+    expect($persistedCiphertext)->not->toContain('alice@example.com')
+        ->and($persistedCiphertext)->not->toBe($sessionBlob);
+
+    // Request 2 — rehydrate the session from storage without re-encrypting.
+    $rehydrated = new GazeSession(
+        cleanText: 'Email_1',
+        ciphertext: EncryptedBlob::fromCiphertext($persistedCiphertext),
+        detections: 1,
+    );
+
+    expect($rehydrated->ciphertext->ciphertext())->toBe($persistedCiphertext)
+        ->and($rehydrated->ciphertext->decryptedBlob())->toBe($sessionBlob);
 });

@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace CertaMesh\Gaze\Console\Install;
 
+use CertaMesh\Gaze\Console\Concerns\BuildsBinaryArgv;
 use CertaMesh\Gaze\Install\KijiArtifacts;
+use CertaMesh\Gaze\Install\SafetyNetConfigStatus;
 use CertaMesh\Gaze\Install\SafetyNetConfigurator;
 use CertaMesh\Gaze\Install\SafetyNetConfiguratorResult;
 use Illuminate\Console\Command;
@@ -22,6 +24,8 @@ use Illuminate\Console\Command;
  */
 final class InstallSafetyNetCommand extends Command
 {
+    use BuildsBinaryArgv;
+
     protected $signature = 'gaze:install:safety-net
         {--safety-net= : Backend to wire non-interactively: opf|kiji}
         {--kiji-model-dir= : Pinned Kiji DistilBERT model directory (kiji backend only)}
@@ -41,7 +45,7 @@ final class InstallSafetyNetCommand extends Command
         if (! in_array($backend, ['opf', 'kiji'], true)) {
             $this->error("unknown safety-net backend '{$backend}'; expected opf or kiji");
 
-            return 2;
+            return self::INVALID;
         }
 
         $modelDir = null;
@@ -88,7 +92,7 @@ final class InstallSafetyNetCommand extends Command
             return self::FAILURE;
         }
 
-        $result->status === 'unchanged'
+        $result->status === SafetyNetConfigStatus::Unchanged
             ? $this->components->info("safety-net already wired ({$backend}); no change")
             : $this->components->info("safety-net wired ({$backend}) → {$result->envPath}");
 
@@ -160,13 +164,6 @@ final class InstallSafetyNetCommand extends Command
         );
 
         return false;
-    }
-
-    private function stringOption(string $name): ?string
-    {
-        $value = $this->option($name);
-
-        return is_string($value) && $value !== '' ? $value : null;
     }
 
     /**

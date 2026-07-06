@@ -269,12 +269,15 @@ supervision is OS-owned. Use systemd / Horizon / supervisord primitives.
 
 ### Daemon Flags
 
-`gaze:daemon:serve` forwards **every** flag the pinned v0.11.1
-`gaze daemon --help` surface accepts. Daemon-specific knobs live under
-`gaze.daemon.*`; the shared pipeline flags source the same top-level
-`gaze.*` keys the one-shot `Gaze::clean()` path forwards, so a configured
-pipeline behaves identically in both runtimes. Flags marked *artisan
-option* can also be overridden per-invocation on `gaze:daemon:serve`.
+Both daemon spawn paths — `gaze:daemon:serve` AND the `Gaze::daemon()`
+Facade hot path (`DaemonClient` spawn) — forward **every** flag the
+pinned v0.11.1 `gaze daemon --help` surface accepts. Both paths build
+their argv from the same assembler (`Daemon\DaemonArgv`), so they cannot
+drift. Daemon-specific knobs live under `gaze.daemon.*`; the shared
+pipeline flags source the same top-level `gaze.*` keys the one-shot
+`Gaze::clean()` path forwards, so a configured pipeline behaves
+identically in both runtimes. Flags marked *artisan option* can also be
+overridden per-invocation on `gaze:daemon:serve`.
 
 | Upstream flag | Laravel surface | Artisan option |
 |---|---|---|
@@ -306,10 +309,7 @@ option* can also be overridden per-invocation on `gaze:daemon:serve`.
 | n/a (adapter spawn stderr) | `gaze.daemon.stderr_path` / `GAZE_DAEMON_STDERR_PATH` | — |
 
 Note: `--kiji-distilbert-precision` exists on `gaze clean` but NOT on
-`gaze daemon` in v0.11.1, so `:serve` does not forward it. The
-`Gaze::daemon()` Facade hot path (`DaemonClient` spawn) forwards the
-policy / idle-timeout / audit-db trio only; full parity there is a
-follow-up.
+`gaze daemon` in v0.11.1, so neither daemon spawn path forwards it.
 
 Intentionally NOT shipped: `gaze.daemon.events.enabled` (reserved
 P1-violation), `gaze.daemon.extra_flags` (P3 velocity signal),

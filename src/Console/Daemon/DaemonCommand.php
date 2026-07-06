@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CertaMesh\Gaze\Console\Daemon;
 
 use CertaMesh\Gaze\BinaryResolver;
+use CertaMesh\Gaze\Console\Concerns\BuildsBinaryArgv;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 
@@ -23,6 +24,8 @@ use Illuminate\Contracts\Config\Repository as ConfigRepository;
  */
 abstract class DaemonCommand extends Command
 {
+    use BuildsBinaryArgv;
+
     /**
      * Verb-specific flag list assembled from config + artisan options.
      *
@@ -49,36 +52,5 @@ abstract class DaemonCommand extends Command
         }
 
         return $argv;
-    }
-
-    /**
-     * @param  list<string>  $argv
-     */
-    protected function appendFlag(array &$argv, string $name, ?string $value): void
-    {
-        if ($value !== null && $value !== '') {
-            $argv[] = "--{$name}={$value}";
-        }
-    }
-
-    protected function stringOption(string $name): ?string
-    {
-        $value = $this->option($name);
-
-        return is_string($value) && $value !== '' ? $value : null;
-    }
-
-    protected function configString(ConfigRepository $config, string $key): ?string
-    {
-        $value = $config->get($key);
-
-        return is_string($value) && $value !== '' ? $value : null;
-    }
-
-    protected function configNumericString(ConfigRepository $config, string $key): ?string
-    {
-        $value = $config->get($key);
-
-        return is_numeric($value) ? (string) $value : null;
     }
 }

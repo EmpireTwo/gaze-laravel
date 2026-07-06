@@ -21,6 +21,19 @@ use PHPUnit\Framework\Assert as PHPUnit;
  * @method static \CertaMesh\Gaze\Contracts\AuditService audit(?string $auditDbPath = null)
  * @method static \CertaMesh\Gaze\Contracts\DaemonManager daemon()
  *
+ * Fluent fake configuration — proxied to the FakeGaze root, so these are
+ * only available after Gaze::fake() (chaining off the returned fake is the
+ * idiomatic form: Gaze::fake()->cleanUsing(...)->failWith(...)):
+ * @method static FakeGaze cleanUsing(\Closure $handler)
+ * @method static FakeGaze maskUsing(\Closure $handler)
+ * @method static FakeGaze restoreUsing(\Closure $handler)
+ * @method static FakeGaze failWith(\CertaMesh\Gaze\Exceptions\GazeException $exception)
+ * @method static FakeGaze auditPurgeUsing(\Closure $handler)
+ * @method static FakeGaze auditExportUsing(\Closure $handler)
+ * @method static FakeGaze daemonCleanUsing(\Closure $handler)
+ * @method static FakeGaze withAuditRows(list<list<string>> $rows)
+ * @method static FakeGaze withSafetyNetRows(list<list<string>> $rows)
+ *
  * @see GazeContract
  * @see \CertaMesh\Gaze\Gaze
  */

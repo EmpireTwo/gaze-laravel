@@ -45,8 +45,32 @@ it('defaults gaze.binary to null so BinaryResolver auto-discovers vendor/bin', f
     // caused BinaryResolver to short-circuit on explicitPath and never reach
     // the vendor/bin/gaze fallback where the Composer plugin (PR #12) deposits
     // the auto-installed binary. The default MUST be null.
-    expect(getenv('GAZE_BINARY'))->toBeFalse();
-    expect($this->app['config']->get('gaze.binary'))->toBeNull();
+    //
+    // Re-evaluate the shipped config file under a controlled environment
+    // instead of asserting on the developer's shell: exporting GAZE_BINARY is
+    // the documented way to run the integration suite, and this test must not
+    // redden that run.
+    $previous = getenv('GAZE_BINARY');
+    $hadEnv = array_key_exists('GAZE_BINARY', $_ENV);
+    $hadServer = array_key_exists('GAZE_BINARY', $_SERVER);
+    putenv('GAZE_BINARY');
+    unset($_ENV['GAZE_BINARY'], $_SERVER['GAZE_BINARY']);
+
+    try {
+        $shipped = require dirname(__DIR__, 2).'/config/gaze.php';
+        expect($shipped)->toBeArray()
+            ->and($shipped['binary'])->toBeNull();
+    } finally {
+        if ($previous !== false) {
+            putenv("GAZE_BINARY={$previous}");
+            if ($hadEnv) {
+                $_ENV['GAZE_BINARY'] = $previous;
+            }
+            if ($hadServer) {
+                $_SERVER['GAZE_BINARY'] = $previous;
+            }
+        }
+    }
 });
 
 it('flows an explicit gaze.binary config through to BinaryResolver', function () {

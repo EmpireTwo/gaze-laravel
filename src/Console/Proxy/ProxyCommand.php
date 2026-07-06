@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace CertaMesh\Gaze\Console\Proxy;
 
 use CertaMesh\Gaze\BinaryResolver;
+use CertaMesh\Gaze\Console\Concerns\BuildsBinaryArgv;
 use CertaMesh\Gaze\Exceptions\GazeBinaryMissingException;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
@@ -14,8 +15,9 @@ use Illuminate\Process\Factory as ProcessFactory;
  * Base class for the gaze:proxy:* artisan wrappers.
  *
  * Each concrete subcommand shells out to the upstream `gaze proxy <verb>`
- * subcommand via Symfony Process. Subclasses own (a) the `proxy` verb and
- * (b) the verb-specific flag list assembled from config + artisan options.
+ * subcommand via Illuminate\Process\Factory. Subclasses own (a) the `proxy`
+ * verb and (b) the verb-specific flag list assembled from config + artisan
+ * options.
  *
  * Adopters need the upstream binary built with `cargo install gaze-cli
  * --features proxy` — the GitHub-release binary asset is built without the
@@ -23,6 +25,8 @@ use Illuminate\Process\Factory as ProcessFactory;
  */
 abstract class ProxyCommand extends Command
 {
+    use BuildsBinaryArgv;
+
     /**
      * The proxy subcommand name (e.g. `start`, `stop`, `serve`).
      */
@@ -96,7 +100,78 @@ abstract class ProxyCommand extends Command
             return $result->exitCode() ?? self::FAILURE;
         }
 
+        return $this->successExitCode($stdout);
+    }
+
+    /**
+     * Map a successful binary run to the artisan exit code. Default: pass
+     * SUCCESS through. `status` overrides to translate the binary's
+     * always-zero exit into a probe-friendly code based on stdout.
+     */
+    protected function successExitCode(string $stdout): int
+    {
         return self::SUCCESS;
+    }
+
+    /**
+     * Shared flag assembly for the daemon-launching verbs (`start`, `serve`):
+     * bind + upstream endpoints + policy/rulepack/session-ttl, each overridable
+     * per artisan option where a matching option exists.
+     *
+     * @return list<string>
+     */
+    protected function launchFlags(ConfigRepository $config): array
+    {
+        $argv = [];
+
+        $this->appendFlag(
+            $argv,
+            'bind',
+            $this->stringOption('bind') ?? $this->configString($config, 'gaze.proxy.bind'),
+        );
+        $this->appendFlag($argv, 'upstream-openai', $this->configString($config, 'gaze.proxy.upstream.openai'));
+        $this->appendFlag($argv, 'upstream-anthropic', $this->configString($config, 'gaze.proxy.upstream.anthropic'));
+        $this->appendFlag($argv, 'upstream-gemini', $this->configString($config, 'gaze.proxy.upstream.gemini'));
+        $this->appendFlag(
+            $argv,
+            'policy',
+            $this->stringOption('policy') ?? $this->configString($config, 'gaze.proxy.policy_path'),
+        );
+        $this->appendFlag(
+            $argv,
+            'rulepack',
+            $this->stringOption('rulepack') ?? $this->configString($config, 'gaze.proxy.rulepack'),
+        );
+        $this->appendFlag(
+            $argv,
+            'session-ttl',
+            $this->stringOption('session-ttl') ?? $this->configString($config, 'gaze.proxy.session_ttl'),
+        );
+
+        return $argv;
+    }
+
+    /**
+     * Shared flag assembly for the daemon-stopping verbs (`stop`, `restart`):
+     * optional `--force` plus the stop timeout.
+     *
+     * @return list<string>
+     */
+    protected function stopFlags(ConfigRepository $config): array
+    {
+        $argv = [];
+
+        if ((bool) $this->option('force')) {
+            $argv[] = '--force';
+        }
+
+        $this->appendFlag(
+            $argv,
+            'timeout',
+            $this->stringOption('timeout') ?? $this->configString($config, 'gaze.proxy.stop_timeout'),
+        );
+
+        return $argv;
     }
 
     /**
@@ -115,37 +190,5 @@ abstract class ProxyCommand extends Command
             });
 
         return $result->exitCode() ?? self::FAILURE;
-    }
-
-    /**
-     * Append `--name=value` when value is a non-empty string.
-     *
-     * @param  list<string>  $argv
-     */
-    protected function appendFlag(array &$argv, string $name, ?string $value): void
-    {
-        if ($value !== null && $value !== '') {
-            $argv[] = "--{$name}={$value}";
-        }
-    }
-
-    /**
-     * Artisan option as non-empty string, or null.
-     */
-    protected function stringOption(string $name): ?string
-    {
-        $value = $this->option($name);
-
-        return is_string($value) && $value !== '' ? $value : null;
-    }
-
-    /**
-     * Config value as non-empty string, or null.
-     */
-    protected function configString(ConfigRepository $config, string $key): ?string
-    {
-        $value = $config->get($key);
-
-        return is_string($value) && $value !== '' ? $value : null;
     }
 }
