@@ -157,6 +157,19 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
 
 ### Fixed
 
+- **The published `resources/policy.toml` no longer leaks symbol-currency
+  amounts (`5000€`, `$3,500.00`)** (#141). The `money_amount` pattern wrapped
+  its whole alternation in `\b...\b`; `\b` next to a non-word character
+  (`€`/`$`/`£`) only matches when flanked by a word character, so the
+  symbol-form branches **never matched in any gaze version** — upstream
+  forensics (CertaMesh/gaze#361, byte-identical outputs v0.5.2 vs v0.11.x)
+  ruled out a regression, meaning this policy leaked symbol amounts since day
+  one. `\b` now guards only the digit/alpha edges (upstream's documented
+  boundary-group rewrite); symbols delimit themselves. The four previously
+  skipped symbol-amount cases are live again, including both mis-span
+  fixtures, and the alpha-code half (`EUR`/`USD`/`GBP`) is pinned unchanged.
+  Adopters with a published policy should port the same pattern — see
+  UPGRADING.md.
 - **The published `resources/policy.toml` no longer leaks IBANs against the
   pinned binary v0.11.3** (#141). Upstream ≥ 0.11.x emits IBAN/credit-card
   spans whose collision cannot be resolved under the fail-closed family class
@@ -165,8 +178,6 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
   default let IBANs through unredacted. A `tokenize` rule for the family class
   closes the leak (upstream contract question tracked in CertaMesh/gaze#360).
   Adopters with a published policy should add the same rule — see UPGRADING.md.
-  The symbol-currency (`5000€` / `$3,500.00`) leak from #141 is still open,
-  pending the upstream `\b` semantics verdict (CertaMesh/gaze#361).
 - The `Gaze::daemon()` facade spawn path now forwards the **full** daemon flag
   surface. Previously it assembled only `--policy`, `--idle-timeout`, and
   `--audit-db`, silently dropping configured `gaze.daemon.session_idle_timeout_s`,
