@@ -5,41 +5,29 @@ declare(strict_types=1);
 namespace CertaMesh\Gaze\Console;
 
 use CertaMesh\Gaze\BinaryResolver;
-use CertaMesh\Gaze\Exceptions\GazeBinaryMissingException;
+use CertaMesh\Gaze\Console\Concerns\RunsHealthProbes;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Config\Repository;
 use Illuminate\Process\Factory as ProcessFactory;
 
 final class CheckCommand extends Command
 {
+    use RunsHealthProbes;
+
     protected $signature = 'gaze:check';
 
     protected $description = 'Verify the gaze binary resolves and is runnable.';
 
     public function handle(BinaryResolver $resolver, ProcessFactory $process): int
     {
-        try {
-            $binary = $resolver->resolve();
-        } catch (GazeBinaryMissingException $e) {
-            $this->components->twoColumnDetail('binary', '<fg=red>missing</>');
-            $this->components->twoColumnDetail('status', '<fg=red>FAIL</>');
-            $this->line($e->getMessage());
-
+        $binary = $this->probeBinary($resolver);
+        if ($binary === null) {
             return self::FAILURE;
         }
 
-        $this->components->twoColumnDetail('binary', $binary);
-
-        $result = $process->newPendingProcess()->timeout(5)->run([$binary, '--version']);
-        if (! $result->successful()) {
-            $this->components->twoColumnDetail('version', '<fg=red>unknown</>');
-            $this->components->twoColumnDetail('status', '<fg=red>FAIL</>');
-            $this->line('gaze --version exited non-zero');
-
+        if ($this->probeVersion($binary, $process, 'gaze --version exited non-zero') === null) {
             return self::FAILURE;
         }
-
-        $this->components->twoColumnDetail('version', trim($result->output()));
 
         [$encrypterLabel, $encrypterOk] = $this->resolveEncrypterLabel();
         $this->components->twoColumnDetail('encrypter', $encrypterLabel);
@@ -60,10 +48,9 @@ final class CheckCommand extends Command
      */
     private function resolveEncrypterLabel(): array
     {
-        try {
-            $this->laravel->make('gaze.encrypter');
-        } catch (\Throwable $e) {
-            $this->line($e->getMessage());
+        $failure = $this->probeEncrypter();
+        if ($failure !== null) {
+            $this->line($failure->getMessage());
 
             return ['<fg=red>invalid</>', false];
         }

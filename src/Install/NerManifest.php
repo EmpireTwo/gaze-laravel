@@ -32,16 +32,6 @@ final class NerManifest
         private readonly string $body,
     ) {}
 
-    public static function fromFile(string $path): self
-    {
-        $body = file_get_contents($path);
-        if ($body === false) {
-            throw new NerManifestInvalidException("could not read NER manifest: {$path}");
-        }
-
-        return self::fromString($body);
-    }
-
     public static function fromUrl(string $url, HttpClientInterface $client): self
     {
         if (! str_starts_with($url, 'https://')) {

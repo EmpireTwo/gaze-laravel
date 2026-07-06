@@ -26,8 +26,8 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use CertaMesh\Gaze\Exceptions\GazeException;
+use CertaMesh\Gaze\Exceptions\GazeIntegrityException;
 use CertaMesh\Gaze\Facades\Gaze;
-use CertaMesh\Gaze\Queue\Contracts\RequiresFreshClean;
 use CertaMesh\Gaze\Queue\GazeRetryPolicy;
 
 class RedactAndForwardJob implements ShouldQueue
@@ -60,7 +60,7 @@ class RedactAndForwardJob implements ShouldQueue
     public function catch(\Throwable $e): void
     {
         if ($e instanceof GazeException) {
-            if ($e instanceof RequiresFreshClean) {
+            if ($e instanceof GazeIntegrityException && $e->requiresFreshClean()) {
                 // Blob is unrecoverable. Dispatch a fresh clean from original text.
                 static::dispatch($this->text);
                 $this->fail($e);
@@ -130,7 +130,7 @@ class RedactAndForwardJob implements ShouldQueue
 
 ### Exit bucket 3 — Session integrity error
 
-| Exception | Retry | `RequiresFreshClean` |
+| Exception | Retry | `requiresFreshClean()` |
 |---|---|---|
 | `GazeUnknownTokenException` | `NonRetryable` → fail | No |
 | `GazeResponseDecodeException` | `NonRetryable` → fail | No |
@@ -139,7 +139,7 @@ class RedactAndForwardJob implements ShouldQueue
 | `GazeBlobExpiredException` | `NonRetryable` → fail | **Yes** |
 | `GazePipelineException` | `Retryable` → release | No |
 
-`GazeBlobExpiredException` and `GazeInvalidBlobVersionException` both implement `RequiresFreshClean`. The `requiresFreshClean()` method returns `true` — a signal that the only recovery is to re-run `Gaze::clean()` on the original plaintext. See the job example above.
+`GazeBlobExpiredException` and `GazeInvalidBlobVersionException` both override `requiresFreshClean()` (defined on `GazeIntegrityException`) to return `true` — a signal that the only recovery is to re-run `Gaze::clean()` on the original plaintext. See the job example above. (Both also still carry the deprecated `Queue\Contracts\RequiresFreshClean` marker interface for BC until 1.0; prefer the method.)
 
 `GazePipelineException` is retryable because it typically reflects transient SQLite contention on the audit DB. If it fires persistently, investigate write concurrency on the audit DB file.
 
@@ -223,7 +223,7 @@ Even after the TTL elapses, the ciphertext stored in `failed_jobs` remains encry
 
 - [ ] Job uses `Queueable` and `InteractsWithQueue`.
 - [ ] `catch(\Throwable $e)` checks for `GazeException` before calling `GazeRetryPolicy::dispatch($e, $this)`.
-- [ ] `RequiresFreshClean` handled explicitly: dispatch a fresh job and fail the current one.
+- [ ] `requiresFreshClean()` handled explicitly: dispatch a fresh job and fail the current one.
 - [ ] `GazeInfraAlert` listener wired to your alerting system.
 - [ ] Gaze job classes excluded from Telescope job recording or payload redacted.
 - [ ] `queue:prune-failed` scheduled at an interval ≤ `GAZE_SESSION_TTL`.

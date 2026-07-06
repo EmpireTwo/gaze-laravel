@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace CertaMesh\Gaze\Console\Install;
 
+use CertaMesh\Gaze\Console\Concerns\BuildsBinaryArgv;
 use CertaMesh\Gaze\Install\SafetyNetConfigurator;
 use Illuminate\Console\Command;
 use Illuminate\Contracts\Foundation\Application;
@@ -25,6 +26,8 @@ use Illuminate\Process\Factory as ProcessFactory;
  */
 final class InstallCommand extends Command
 {
+    use BuildsBinaryArgv;
+
     protected $signature = 'gaze:install
         {--force : Re-run already-done steps (binary re-download, NER re-fetch, config re-publish). Does NOT overwrite an existing policy.toml.}
         {--force-policy : Also overwrite an existing policy.toml (destructive — off by default for reversibility)}
@@ -220,12 +223,5 @@ final class InstallCommand extends Command
             };
             $this->components->twoColumnDetail($step, "<fg={$color}>{$status}</>");
         }
-    }
-
-    private function stringOption(string $name): ?string
-    {
-        $value = $this->option($name);
-
-        return is_string($value) && $value !== '' ? $value : null;
     }
 }

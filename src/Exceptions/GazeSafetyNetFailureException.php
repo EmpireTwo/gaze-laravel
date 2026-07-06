@@ -19,7 +19,7 @@ final class GazeSafetyNetFailureException extends GazeIntegrityException impleme
     public function __construct(
         string $message,
         int $exitCode,
-        string $stderrHash,
+        ?string $stderrHash,
         private readonly string $safetyNetVariant,
         ?\Throwable $previous = null,
     ) {

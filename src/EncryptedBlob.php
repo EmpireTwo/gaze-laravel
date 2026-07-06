@@ -37,9 +37,32 @@ final readonly class EncryptedBlob
     }
 
     /**
-     * Rehydrate from an already-encrypted ciphertext. Pure — touches no
-     * container and performs no crypto; decryptedBlob() resolves the bound
-     * encrypter lazily when (and only when) decryption is requested.
+     * Rehydrate a blob from previously persisted ciphertext.
+     *
+     * Supported public API: this is the rehydration point for adopters who
+     * persist a session across requests (queue a job, park a conversation,
+     * respond later). Store `$session->ciphertext->ciphertext()` wherever you
+     * like — it is already encrypted — then rebuild the session when the LLM
+     * reply arrives:
+     *
+     * ```php
+     * // Request 1 — clean and persist
+     * $session = Gaze::clean($input);
+     * $model->update(['gaze_blob' => $session->ciphertext->ciphertext()]);
+     *
+     * // Request 2 — rehydrate and restore
+     * $session = new GazeSession(
+     *     cleanText: $model->clean_text,
+     *     ciphertext: EncryptedBlob::fromCiphertext($model->gaze_blob),
+     *     detections: $model->detections,
+     * );
+     * $reply = Gaze::restore($session, $llmReply);
+     * ```
+     *
+     * Pure — touches no container and performs no crypto. No encrypter is
+     * bound on this path; decryptedBlob() lazily resolves the `gaze.encrypter`
+     * binding (the same key that produced the ciphertext) when — and only
+     * when — decryption is requested at restore time.
      */
     public static function fromCiphertext(string $ciphertext): self
     {

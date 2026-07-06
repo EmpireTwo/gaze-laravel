@@ -9,7 +9,7 @@ class GazeBinaryMissingException extends GazeOpsConfigException
     public function __construct(
         string $message,
         int $exitCode = -1,
-        string $stderrHash = '',
+        ?string $stderrHash = null,
         ?\Throwable $previous = null,
     ) {
         parent::__construct($message, $exitCode, $stderrHash, null, $previous);

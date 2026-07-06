@@ -12,7 +12,7 @@ final class GazeUnsupportedSessionScopeException extends GazeIntegrityException 
     public function __construct(
         string $message,
         int $exitCode,
-        string $stderrHash,
+        ?string $stderrHash,
         private readonly string $attemptedScope,
         ?\Throwable $previous = null,
     ) {

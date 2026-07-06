@@ -12,7 +12,7 @@ class GazeCallerBugException extends GazeException implements NonRetryable
     public function __construct(
         string $message,
         int $exitCode,
-        string $stderrHash,
+        ?string $stderrHash,
         ?Variant $variant = Variant::StdinParse,
         ?\Throwable $previous = null,
     ) {

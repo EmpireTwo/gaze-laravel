@@ -21,7 +21,7 @@ final class GazePolicySchemaUnsupportedException extends GazeOpsConfigException
     public function __construct(
         string $message,
         int $exitCode,
-        string $stderrHash,
+        ?string $stderrHash,
         private readonly string $found,
         private readonly string $supported,
         ?\Throwable $previous = null,

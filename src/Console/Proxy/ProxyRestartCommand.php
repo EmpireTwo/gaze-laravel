@@ -21,18 +21,6 @@ final class ProxyRestartCommand extends ProxyCommand
 
     protected function flags(ConfigRepository $config): array
     {
-        $argv = [];
-
-        if ((bool) $this->option('force')) {
-            $argv[] = '--force';
-        }
-
-        $this->appendFlag(
-            $argv,
-            'timeout',
-            $this->stringOption('timeout') ?? $this->configString($config, 'gaze.proxy.stop_timeout'),
-        );
-
-        return $argv;
+        return $this->stopFlags($config);
     }
 }

@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace CertaMesh\Gaze\Console;
+namespace CertaMesh\Gaze\Console\Install;
 
 use CertaMesh\Gaze\Install\NerInstaller;
 use CertaMesh\Gaze\Install\NerInstallerOptions;
@@ -32,6 +32,8 @@ final class InstallNerCommand extends Command
      *
      * `gaze:install-ner` is the pre-PR-2 name, kept as a deprecated alias so the
      * rename stays a MINOR change. Prefer the canonical `gaze:install:ner`.
+     *
+     * @deprecated the `gaze:install-ner` alias will be removed in a future major; use `gaze:install:ner`
      */
     protected $aliases = ['gaze:install-ner'];
 

@@ -11,7 +11,7 @@ class GazePolicyConfigException extends GazeOpsConfigException
     public function __construct(
         string $message,
         int $exitCode,
-        string $stderrHash,
+        ?string $stderrHash,
         ?\Throwable $previous = null,
         Variant $variant = Variant::PolicyConfig,
     ) {

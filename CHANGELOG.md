@@ -55,6 +55,59 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
   round-trip lazily re-resolves the bound encrypter. Payloads serialized by
   earlier package versions still unserialize (legacy property-shape fallback).
 
+### Changed
+
+- `GazeException::$stderrHash` is now nullable (`?string`). `null` means no
+  subprocess stderr stream ever existed — pre-flight validation failures,
+  timeouts, stdout decode failures, daemon envelope errors, and the
+  `Install\Ner*` family — replacing the previous convention of presenting
+  `hash('sha256', '')` (`e3b0c44...`) as a forensic hash of stderr that never
+  was. Exception messages render the null case as `stderr_sha256=none`;
+  `toLogContext()` keeps the `stderr_sha256` key with a `null` value. A real
+  subprocess failure that emitted nothing on stderr still carries the hash of
+  the empty string, so "no stream" and "empty stream" are now distinguishable.
+  If you type-hinted `$e->stderrHash` as `string`, treat it as `?string`.
+- Internal: `Gaze::buildException()` no longer hand-builds each typed
+  exception. Construction lives on the wire enum as
+  `Variant::toException(string $stage, int $exitCode, ?string $stderrHash, string $stderr = '')`,
+  backed by a one-line-per-variant `[exception class, message summary]` table,
+  so a new upstream error variant is a one-line addition. Message strings are
+  unchanged, and raw stderr still never reaches messages or log context.
+- Console-layer dedupe (no behavior change; argv assembly and command output
+  are pinned byte-identical by the existing tests):
+  - The `appendFlag()` / `stringOption()` / `configString()` /
+    `configNumericString()` argv helpers, previously duplicated across the
+    proxy, daemon and install command families, now live in one shared
+    `CertaMesh\Gaze\Console\Concerns\BuildsBinaryArgv` trait.
+  - `ProxyCommand` gained shared `launchFlags()` / `stopFlags()` assemblies
+    (deduping `serve`/`start` and `stop`/`restart`) plus a `successExitCode()`
+    hook so `gaze:proxy:status` no longer re-implements `runProcess()` just to
+    remap the final exit code.
+  - `gaze:check` and `gaze:doctor` now share their binary / version / encrypter
+    probes via `CertaMesh\Gaze\Console\Concerns\RunsHealthProbes` (check was a
+    strict subset of doctor); output text is unchanged.
+  - `InstallNerCommand` moved from `CertaMesh\Gaze\Console` to
+    `CertaMesh\Gaze\Console\Install` alongside the other install commands.
+    The `gaze:install:ner` signature and the deprecated `gaze:install-ner`
+    alias are unchanged, but the FQCN change is technically breaking for
+    anyone referencing the command class directly.
+  - `gaze:install:safety-net` returns `Command::INVALID` instead of a bare
+    `2` for an unknown backend (same exit code).
+
+### Deprecated
+
+- The `Queue\Contracts\RequiresFreshClean` marker interface. The
+  `GazeIntegrityException::requiresFreshClean()` method is the canonical
+  fresh-clean signal — it lives on the exception (mirroring the
+  `HasRetryDisposition` method-based pattern) and can give variant-dependent
+  answers, which a static marker cannot. Branch on
+  `$e instanceof GazeIntegrityException && $e->requiresFreshClean()` instead of
+  `$e instanceof RequiresFreshClean`. `GazeBlobExpiredException` and
+  `GazeInvalidBlobVersionException` keep implementing the marker until 1.0, so
+  existing `instanceof` checks continue to work; nothing in this package ever
+  dispatched on it (`GazeRetryPolicy` does not consult it). Resolves
+  architecture debt L-3 (two paths for the same semantic).
+
 ### Added
 
 - `php artisan about` now carries a `Gaze` section: resolved binary path (or
@@ -63,6 +116,25 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
   unless `about` actually runs, and it deliberately reports the *pinned*
   version instead of spawning `gaze --version` (doctor owns the real-binary
   probe). Guarded by `class_exists(AboutCommand::class)`.
+- Fluent `Gaze::fake()` configuration, mirroring the `Http::fake()` idiom:
+  `cleanUsing()`, `maskUsing()` (net-new seam — `mask()` previously had no
+  handler), `restoreUsing()`, `auditPurgeUsing()`, `auditExportUsing()`, and
+  `daemonCleanUsing()` script each verb by chaining off the returned fake;
+  every positional constructor closure now has a fluent twin. Additive — the
+  positional-closure constructor keeps working, and a fluent call simply
+  replaces the corresponding handler.
+- `Gaze::fake()->failWith(GazeException $e)` simulates a broken binary:
+  `clean()`, `mask()`, `restore()`, and `daemon()->clean()` throw the given
+  exception *after* recording the call, so failure-path tests can still assert
+  the service was reached. Takes precedence over scripted handlers.
+- `Gaze::fake()->withAuditRows()` / `->withSafetyNetRows()` seed the rows that
+  `audit()->query()->execute()` and `audit()->safetyNetQuery()->execute()`
+  return (previously unreachable: the fake builders accepted rows but
+  `FakeAuditService` always constructed them empty). Rows use the real
+  builders' TSV positional-list shape; filters remain no-op recorders.
+- `FakeTokenizer`'s token grammar is now composed from named, per-branch
+  commented alternation parts (behaviour byte-identical, pinned by a
+  per-branch parity dataset).
 
 - `gaze:doctor` now flags a stale pinned binary (north-star P7, "doctor before
   failure"). It parses the installed binary's `--version` and compares it against
@@ -77,6 +149,64 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
   until a runtime feature went missing. The version-token parsing is now a shared
   `BinaryDownloader::parseVersion()` so the install-skip decision and this probe
   agree on what "the installed version" is.
+- `CertaMesh\Gaze\Daemon\DaemonArgv` — the single source of truth for the
+  `gaze daemon` config→flag mapping. Both spawn paths (`gaze:daemon:serve` and
+  the `Gaze::daemon()` facade `DaemonClient` binding) now delegate to it, so
+  the artisan and facade argv assemblies cannot drift. Null/empty config keys
+  still omit the flag so upstream defaults apply.
+
+### Fixed
+
+- The `Gaze::daemon()` facade spawn path now forwards the **full** daemon flag
+  surface. Previously it assembled only `--policy`, `--idle-timeout`, and
+  `--audit-db`, silently dropping configured `gaze.daemon.session_idle_timeout_s`,
+  `session_cap`, `ner_model_dir`, `ner_locale`, `kiji_distilbert_locales`, and
+  the shared pipeline keys (`gaze.locale`, `gaze.ner_threshold`, and the whole
+  safety-net / OpenAI-filter / Kiji family) when the daemon was spawned via the
+  facade instead of `gaze:daemon:serve`.
+
+### Changed
+
+- `EncryptedBlob::fromCiphertext()` is now documented as **supported public
+  API** — the rehydration point for adopters persisting a session's
+  already-encrypted blob across requests (persist
+  `$session->ciphertext->ciphertext()`, rebuild later with
+  `EncryptedBlob::fromCiphertext($stored)`). Behaviour is unchanged; a feature
+  test now pins the persisted-ciphertext round-trip.
+
+### Changed (BREAKING)
+
+- `SafetyNetConfiguratorResult::$status` is now the backed enum
+  `CertaMesh\Gaze\Install\SafetyNetConfigStatus: string { Written = 'written';
+  Unchanged = 'unchanged' }` instead of a bare string. The docblocked
+  `previewed` status is gone from the surface — it was never emitted
+  (`--print` never constructs a result). **Migration:** compare against
+  `SafetyNetConfigStatus::Written` / `::Unchanged` (or `->status->value` for
+  the old strings). Pre-1.0 breaking-on-MINOR per SemVer policy.
+- `BinaryInstaller` is slimmed to its real post-plugin surface:
+  `postInstall(Event)` (the documented opt-in `post-install-cmd` /
+  `post-update-cmd` script hook), `PINNED_VERSION`, and the
+  Composer-trust-context `resolveReleaseBase()`. The ~11 `@internal`
+  delegating static shims (`detectTarget`, `alreadyInstalled`,
+  `verifyChecksum`, `extract`, `installBinary`, `deriveGithubRepo`,
+  `buildRequestHeaders`, `extractAssetIds`, `parseStatusAndLocation`,
+  `stripAuthOnCrossHost`, `resolveLocation`) that existed for the removed
+  Composer plugin's call sites are deleted; `install()` and
+  `isProductionEnvironment()` are now private. **Migration:** call the same
+  methods on `BinaryDownloader`, where the pipeline actually lives.
+
+### Removed
+
+- `BinaryDownloader::extract()` and the `.tar.gz` branch of `installBinary()`.
+  The pipeline names assets `gaze-{target}` (never an archive), so the branch
+  was unreachable; the pinned upstream release ships raw binaries plus
+  `.sha256` sidecars only. The now-unused `ext-phar` platform requirement is
+  dropped from `composer.json`.
+- `NerManifest::fromFile()` — zero callers; manifests only ever arrive via
+  `fromUrl()` / `fromString()`.
+- `resources/ner/policy-snippet.davlan-mbert.toml` — orphaned since
+  `PolicyTomlPatcher` began generating the `[ner]` block programmatically;
+  never listed in `NerManifest::FILES`, never copied by the fetcher.
 
 ### Removed (BREAKING)
 
@@ -93,10 +223,24 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
   but still does not fail on it. Adopters who want the old
   auto-download behaviour can wire `CertaMesh\Gaze\Install\BinaryInstaller::postInstall`
   into a Composer `post-update-cmd` script (honours `GAZE_SKIP_BINARY_DOWNLOAD`).
-  `BinaryInstaller`, `BinaryDownloader`, and everything `gaze:install` uses are
-  unchanged — only the plugin trigger is gone. Removed the `composer-plugin-api`
+  `BinaryDownloader` and everything `gaze:install` uses are unchanged — only
+  the plugin trigger is gone (but see *Changed (BREAKING)* above:
+  `BinaryInstaller`'s plugin-era delegating shims are also removed this
+  release). Removed the `composer-plugin-api`
   requirement and the `extra.class` plugin declaration. See
   [UPGRADING.md](UPGRADING.md) (`v0.12.0 → v0.13.0`) for the full guide.
+
+### Fixed
+
+- Tests: the integration behavior pins (`PublishedPolicyTest`, `PolicyRegexBoundaryTest`)
+  no longer perma-skip on a stale `0.5.x` version sniff — they now gate on
+  `BinaryDownloader::parseVersion() >= PINNED_VERSION` and pin actual v0.11.3
+  behavior — and `ServiceProviderTest` no longer reddens the suite when
+  `GAZE_BINARY` is exported (the documented way to run the integration tests).
+  Un-skipping surfaced two published-policy gaps against the pinned binary
+  (IBANs and symbol-currency amounts pass through unredacted); tracked in
+  [#141](https://github.com/CertaMesh/gaze-laravel/issues/141) with the
+  affected cases skipped-with-TODO, not papered over.
 
 ## [0.12.0] - 2026-07-03
 

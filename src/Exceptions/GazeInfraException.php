@@ -11,7 +11,7 @@ abstract class GazeInfraException extends GazeException
     public function __construct(
         string $message,
         int $exitCode,
-        string $stderrHash,
+        ?string $stderrHash,
         ?Variant $variant = Variant::Io,
         ?\Throwable $previous = null,
     ) {
