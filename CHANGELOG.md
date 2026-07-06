@@ -4,6 +4,57 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
 
 ## [Unreleased]
 
+### Changed (BREAKING)
+
+- **`Gaze::__construct` now takes a `GazeOptions` value object.** The 29-scalar
+  constructor is gone; the signature is now
+  `new Gaze(BinaryResolver $resolver, ProcessFactory $process, Container $container, ?string $policyPath = null, GazeOptions $options = new GazeOptions)`.
+  Every CLI tuning knob (`maxBytes`, `locale`, the safety-net / OPF / Kiji
+  family, `restoreMode`, `nerThreshold`, …) moved onto the new readonly
+  `CertaMesh\Gaze\GazeOptions` DTO, and `GazeOptions::fromConfig(config('gaze'))`
+  is the single config-array → typed-value coercion layer (previously duplicated
+  between the provider binding closure and inline casts in the config file).
+  This only affects code constructing `Gaze` manually — resolving via the
+  container, the facade, or `Contracts\Gaze` is unchanged, and the
+  `Contracts\Gaze` public API is untouched. The `clean` argv order the binary
+  receives is byte-for-byte identical (contract-pinned by the argv tests).
+  Pre-1.0, so this lands on a MINOR bump.
+
+- **`GazeServiceProvider` is no longer a `DeferrableProvider`** and its
+  `provides()` method is gone. The bindings are cheap closures (nothing is
+  constructed until first resolution), so deferral bought nothing — and it
+  caused the known gotcha where `config('gaze.*')` read as `null` in HTTP
+  requests that never resolved a gaze service, because the package config was
+  only merged once a deferred binding was touched. Registration now always
+  runs. **Migration:** none for normal apps; if you called
+  `$provider->provides()` directly (unlikely), drop the call.
+
+### Changed
+
+- The shipped `config/gaze.php` groups the ~14 flat safety-net / OPF / Kiji
+  root keys into one nested `'safety_net' => [...]` group (with
+  `openai_filter` and `kiji` sub-groups). **Not breaking:** env var names are
+  unchanged; `GazeOptions::fromConfig()` reads the nested keys first and falls
+  back to the deprecated flat keys, so pre-v0.13 published configs keep
+  working; and at registration the provider back-fills the flat keys from the
+  nested group (collapsing `gaze.safety_net` back to the bool enable switch)
+  so legacy `config('gaze.safety_net_*')` readers — including
+  `gaze:daemon:serve` and `gaze:doctor` — observe the same values. The flat
+  keys are deprecated and will be dropped no earlier than v1.0. The config
+  file no longer carries inline casts — coercion lives solely in
+  `GazeOptions::fromConfig()`. See UPGRADING.md for the full key map.
+
+- `EncryptedBlob` no longer service-locates `app('gaze.encrypter')` on the hot
+  path: `Gaze` now receives the `gaze.encrypter` binding via its constructor
+  and passes it to `EncryptedBlob::wrap()`, which accepts an optional encrypter
+  parameter (omitting it keeps the container fallback for fakes and fixtures,
+  so `wrap($blob)` call sites are unaffected). `fromCiphertext()` stays pure.
+  The blob also gains explicit `__serialize`/`__unserialize`: only the
+  ciphertext crosses serialization — the encrypter reference is dropped so
+  queue payloads never embed the raw encryption key — and decryption after a
+  round-trip lazily re-resolves the bound encrypter. Payloads serialized by
+  earlier package versions still unserialize (legacy property-shape fallback).
+
 ### Changed
 
 - `GazeException::$stderrHash` is now nullable (`?string`). `null` means no
@@ -59,6 +110,12 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
 
 ### Added
 
+- `php artisan about` now carries a `Gaze` section: resolved binary path (or
+  `<not installed>`), the package's binary pin, the policy path, and the
+  safety-net switch. The section is a lazy closure — nothing is evaluated
+  unless `about` actually runs, and it deliberately reports the *pinned*
+  version instead of spawning `gaze --version` (doctor owns the real-binary
+  probe). Guarded by `class_exists(AboutCommand::class)`.
 - Fluent `Gaze::fake()` configuration, mirroring the `Http::fake()` idiom:
   `cleanUsing()`, `maskUsing()` (net-new seam — `mask()` previously had no
   handler), `restoreUsing()`, `auditPurgeUsing()`, `auditExportUsing()`, and

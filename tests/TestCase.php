@@ -8,8 +8,11 @@ use CertaMesh\Gaze\Audit\AuditService;
 use CertaMesh\Gaze\BinaryResolver;
 use CertaMesh\Gaze\EncryptedBlob;
 use CertaMesh\Gaze\Gaze;
+use CertaMesh\Gaze\GazeOptions;
 use CertaMesh\Gaze\GazeServiceProvider;
 use CertaMesh\Gaze\GazeSession;
+use Illuminate\Contracts\Encryption\Encrypter;
+use Illuminate\Contracts\Encryption\StringEncrypter;
 use Illuminate\Foundation\Application;
 use Illuminate\Process\Factory as ProcessFactory;
 use Orchestra\Testbench\TestCase as OrchestraTestCase;
@@ -61,39 +64,45 @@ abstract class TestCase extends OrchestraTestCase
     ): Gaze {
         $app = $this->applicationInstance();
 
+        /** @var Encrypter&StringEncrypter $encrypter */
+        $encrypter = $app->make('gaze.encrypter');
+
         return new Gaze(
             resolver: new BinaryResolver(
                 explicitPath: $explicitPath,
                 vendorBinPath: $vendorBinPath,
             ),
             process: $app->make(ProcessFactory::class),
-            timeoutSeconds: $timeoutSeconds,
-            policyPath: $policyPath,
-            maxBytes: $maxBytes,
-            sessionTtlSeconds: $sessionTtlSeconds,
-            auditDbPath: $auditDbPath,
-            locale: $locale,
-            rulepacks: $rulepacks,
-            rulepackPaths: $rulepackPaths,
-            safetyNet: $safetyNet,
-            safetyNetDevice: $safetyNetDevice,
-            openaiFilterCommand: $openaiFilterCommand,
-            openaiFilterCheckpoint: $openaiFilterCheckpoint,
-            openaiFilterOperatingPoint: $openaiFilterOperatingPoint,
-            safetyNetTimeoutMs: $safetyNetTimeoutMs,
-            safetyNetInputLimitBytes: $safetyNetInputLimitBytes,
-            safetyNetMode: $safetyNetMode,
-            safetyNetBackend: $safetyNetBackend,
-            kijiBackend: $kijiBackend,
-            kijiDistilbertPrecision: $kijiDistilbertPrecision,
-            kijiDistilbertCommand: $kijiDistilbertCommand,
-            kijiDistilbertModelDir: $kijiDistilbertModelDir,
-            safetyNetFallback: $safetyNetFallback,
-            sessionScope: $sessionScope,
-            restoreMode: $restoreMode,
-            restoreTelemetry: $restoreTelemetry,
-            nerThreshold: $nerThreshold,
             container: $app,
+            policyPath: $policyPath,
+            options: new GazeOptions(
+                timeoutSeconds: $timeoutSeconds,
+                maxBytes: $maxBytes,
+                sessionTtlSeconds: $sessionTtlSeconds,
+                auditDbPath: $auditDbPath,
+                locale: $locale,
+                rulepacks: $rulepacks,
+                rulepackPaths: $rulepackPaths,
+                safetyNet: $safetyNet,
+                safetyNetDevice: $safetyNetDevice,
+                openaiFilterCommand: $openaiFilterCommand,
+                openaiFilterCheckpoint: $openaiFilterCheckpoint,
+                openaiFilterOperatingPoint: $openaiFilterOperatingPoint,
+                safetyNetTimeoutMs: $safetyNetTimeoutMs,
+                safetyNetInputLimitBytes: $safetyNetInputLimitBytes,
+                safetyNetMode: $safetyNetMode,
+                safetyNetBackend: $safetyNetBackend,
+                kijiBackend: $kijiBackend,
+                kijiDistilbertPrecision: $kijiDistilbertPrecision,
+                kijiDistilbertCommand: $kijiDistilbertCommand,
+                kijiDistilbertModelDir: $kijiDistilbertModelDir,
+                safetyNetFallback: $safetyNetFallback,
+                sessionScope: $sessionScope,
+                restoreMode: $restoreMode,
+                restoreTelemetry: $restoreTelemetry,
+                nerThreshold: $nerThreshold,
+            ),
+            encrypter: $encrypter,
         );
     }
 

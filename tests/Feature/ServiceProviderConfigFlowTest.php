@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use CertaMesh\Gaze\Gaze;
+use CertaMesh\Gaze\GazeServiceProvider;
 use Illuminate\Support\Facades\Process;
 
 it('Gaze resolved from container forwards OpenAI privacy-filter config on clean argv', function () {
@@ -72,6 +73,88 @@ it('container-resolved Gaze forwards --telemetry and --audit-db when restore_tel
         expect($command)
             ->toContain('--telemetry')
             ->toContain('--audit-db=/var/lib/gaze/audit.sqlite');
+
+        return true;
+    });
+});
+
+it('collapses the shipped nested safety_net group to the bool enable switch at boot', function () {
+    // Legacy readers (gaze:daemon:serve, gaze:doctor, adopter code) treat
+    // gaze.safety_net as a bool. The provider's normalization must have
+    // already collapsed the nested group when no env enables it.
+    expect(config('gaze.safety_net'))->toBeFalse();
+});
+
+it('back-fills deprecated flat keys from the nested safety_net group for legacy readers', function () {
+    config()->set('gaze.safety_net', [
+        'enabled' => true,
+        'mode' => 'strict',
+        'timeout_ms' => '2500',
+        'openai_filter' => ['command' => '/usr/local/bin/opf'],
+        'kiji' => ['backend' => 'ort'],
+    ]);
+
+    (new GazeServiceProvider($this->app))->register();
+
+    expect(config('gaze.safety_net'))->toBeTrue()
+        ->and(config('gaze.safety_net_mode'))->toBe('strict')
+        ->and(config('gaze.safety_net_timeout_ms'))->toBe('2500')
+        ->and(config('gaze.openai_filter_command'))->toBe('/usr/local/bin/opf')
+        ->and(config('gaze.kiji_backend'))->toBe('ort');
+});
+
+it('does not let nested back-fill clobber an explicitly set flat key', function () {
+    config()->set('gaze.safety_net', ['enabled' => false, 'mode' => 'strict']);
+    config()->set('gaze.safety_net_mode', 'tolerant');
+
+    (new GazeServiceProvider($this->app))->register();
+
+    expect(config('gaze.safety_net_mode'))->toBe('tolerant');
+});
+
+it('leaves a pre-v0.13 flat bool safety_net config untouched', function () {
+    config()->set('gaze.safety_net', true);
+    config()->set('gaze.safety_net_mode', 'tolerant');
+
+    (new GazeServiceProvider($this->app))->register();
+
+    expect(config('gaze.safety_net'))->toBeTrue()
+        ->and(config('gaze.safety_net_mode'))->toBe('tolerant');
+});
+
+it('Gaze resolved from container forwards the nested safety_net group on clean argv', function () {
+    config([
+        'gaze.binary' => '/fake/gaze',
+        'gaze.safety_net' => [
+            'enabled' => true,
+            'backend' => 'kiji-distilbert',
+            'mode' => 'strict',
+            'timeout_ms' => '2500',
+            'openai_filter' => ['command' => '/usr/local/bin/opf'],
+            'kiji' => ['backend' => 'ort', 'distilbert_precision' => 'int8'],
+        ],
+    ]);
+    $this->app->forgetInstance(Gaze::class);
+
+    Process::fake([
+        '*' => Process::result(output: json_encode([
+            'clean_text' => 'Hello',
+            'session_blob' => base64_encode('blob'),
+            'stats' => ['detections' => 0],
+        ], JSON_THROW_ON_ERROR)),
+    ]);
+
+    $this->app->make(Gaze::class)->clean('Hello');
+
+    Process::assertRan(function ($process): bool {
+        expect($process->command)
+            ->toContain('--safety-net=openai-filter')
+            ->toContain('--safety-net-backend=kiji-distilbert')
+            ->toContain('--safety-net-mode=strict')
+            ->toContain('--safety-net-timeout-ms=2500')
+            ->toContain('--openai-filter-command=/usr/local/bin/opf')
+            ->toContain('--kiji-backend=ort')
+            ->toContain('--kiji-distilbert-precision=int8');
 
         return true;
     });

@@ -56,6 +56,94 @@ upcoming release in full; per-minor guides for earlier versions live in
    surfaces the gap instead of silently passing — re-run
    `php artisan gaze:install --force` to clear it.
 
+### Safety-net config keys are now a nested `safety_net` group (flat keys deprecated)
+
+The shipped `config/gaze.php` now groups the safety-net / OpenAI-privacy-filter
+/ Kiji family under one nested `'safety_net' => [...]` array instead of ~14
+flat root keys. **Env var names are unchanged** — if you configure gaze purely
+through `.env`, there is nothing to do.
+
+Key map (old flat root key → new nested key):
+
+| Deprecated flat key | New nested key |
+| --- | --- |
+| `safety_net` (bool) | `safety_net.enabled` |
+| `safety_net_backend` | `safety_net.backend` |
+| `safety_net_device` | `safety_net.device` |
+| `safety_net_timeout_ms` | `safety_net.timeout_ms` |
+| `safety_net_input_limit_bytes` | `safety_net.input_limit_bytes` |
+| `safety_net_mode` | `safety_net.mode` |
+| `safety_net_fallback` | `safety_net.fallback` |
+| `openai_filter_command` | `safety_net.openai_filter.command` |
+| `openai_filter_checkpoint` | `safety_net.openai_filter.checkpoint` |
+| `openai_filter_operating_point` | `safety_net.openai_filter.operating_point` |
+| `kiji_backend` | `safety_net.kiji.backend` |
+| `kiji_distilbert_precision` | `safety_net.kiji.distilbert_precision` |
+| `kiji_distilbert_command` | `safety_net.kiji.distilbert_command` |
+| `kiji_distilbert_model_dir` | `safety_net.kiji.distilbert_model_dir` |
+
+Backwards compatibility — **nothing breaks either way**:
+
+- **Old published config (flat keys):** keeps working as-is.
+  `GazeOptions::fromConfig()` reads the nested keys first and falls back to the
+  flat keys, and a flat bool `safety_net` is still understood as the enable
+  switch. The flat keys are deprecated and will be dropped no earlier than
+  v1.0 — re-publish the config (`php artisan vendor:publish --tag=gaze-config
+  --force`) at your leisure.
+- **Code that reads the flat keys** (e.g. `config('gaze.safety_net_mode')`):
+  keeps working. At registration the provider back-fills each flat key from
+  its nested counterpart and collapses `gaze.safety_net` itself back to the
+  bool enable switch, so both spellings observe the same values at runtime.
+- **Runtime overrides** (`config()->set(...)` in tests or providers): prefer
+  the flat keys for now — they win over a nested null and every internal
+  reader honours them. Setting a nested key at runtime only affects the
+  one-shot `Gaze::clean()` path (which resolves nested-first), not the
+  already-back-filled flat mirrors.
+
+Two coercion notes, since `GazeOptions::fromConfig()` is now the single
+config→typed-value layer: the config file no longer casts (`(int)`, `(bool)`,
+`=== null` ternaries are gone — values ship as raw `env()` reads), and empty
+strings normalize to null exactly like before (an empty env var still omits
+the CLI flag).
+
+### The service provider is no longer deferred
+
+`GazeServiceProvider` no longer implements `DeferrableProvider` (and its
+`provides()` method is gone). The bindings are cheap closures — nothing is
+constructed until first resolution — and deferral caused the known gotcha
+where `config('gaze.*')` read as `null` during HTTP requests that never
+resolved a gaze service. If you referenced `provides()` directly (unlikely),
+drop the call. `php artisan about` now also carries a `Gaze` section (binary
+path, pinned version, policy path, safety-net switch).
+
+### Constructing `Gaze` manually: new `GazeOptions` constructor (BREAKING)
+
+Only relevant if you `new Gaze(...)` yourself (rare — most code resolves via
+the container/facade, which is unchanged):
+
+```php
+use CertaMesh\Gaze\Gaze;
+use CertaMesh\Gaze\GazeOptions;
+
+// Before (v0.12): 29 scalar constructor params
+new Gaze(resolver: $r, process: $p, timeoutSeconds: 30, container: $app,
+    policyPath: $path, maxBytes: 1024, safetyNetMode: 'strict', /* … */);
+
+// After (v0.13):
+new Gaze(
+    resolver: $r,
+    process: $p,
+    container: $app,
+    policyPath: $path,
+    options: new GazeOptions(timeoutSeconds: 30, maxBytes: 1024, safetyNetMode: 'strict'),
+);
+
+// Or straight from config — this is what the container binding does:
+new Gaze($r, $p, $app, $path, GazeOptions::fromConfig(config('gaze')));
+```
+
+`Contracts\Gaze` (the facade / injection surface) is untouched.
+
 ### Optional: keep the auto-download behaviour, without the plugin
 
 If you preferred the binary landing automatically on every `composer update`,

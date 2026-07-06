@@ -39,20 +39,29 @@ use CertaMesh\Gaze\Install\NerManifest;
 use CertaMesh\Gaze\Install\PolicyTomlPatcher;
 use CertaMesh\Gaze\Install\SafetyNetConfigurator;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
+use Illuminate\Contracts\Encryption\StringEncrypter;
 use Illuminate\Contracts\Foundation\Application;
-use Illuminate\Contracts\Support\DeferrableProvider;
 use Illuminate\Encryption\Encrypter;
+use Illuminate\Foundation\Console\AboutCommand;
 use Illuminate\Process\Factory as ProcessFactory;
 use Illuminate\Support\ServiceProvider;
 use Symfony\Component\HttpClient\HttpClient;
 use Symfony\Component\HttpClient\RetryableHttpClient;
 use Symfony\Contracts\HttpClient\HttpClientInterface;
 
-class GazeServiceProvider extends ServiceProvider implements DeferrableProvider
+/**
+ * Deliberately NOT a DeferrableProvider: every binding here is a cheap
+ * closure (nothing is constructed until first resolution anyway), and
+ * deferral caused the known gotcha where `config('gaze.*')` read as null
+ * during HTTP requests that never resolved a gaze service — the package
+ * config was only merged once a deferred binding was touched.
+ */
+class GazeServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/gaze.php', 'gaze');
+        $this->normalizeSafetyNetConfig();
 
         $this->app->singleton(BinaryDownloader::class);
 
@@ -74,38 +83,22 @@ class GazeServiceProvider extends ServiceProvider implements DeferrableProvider
         $this->app->singleton(GazeContract::class, function (Application $app): Gaze {
             /** @var ConfigRepository $config */
             $config = $app->make('config');
-            $rawAuditDbPath = $config->get('gaze.audit_db_path');
+            /** @var array<string, mixed> $gazeConfig */
+            $gazeConfig = (array) $config->get('gaze', []);
+            $policyPath = $gazeConfig['policy_path'] ?? null;
+
+            /** @var \Illuminate\Contracts\Encryption\Encrypter&StringEncrypter $encrypter */
+            $encrypter = $app->make('gaze.encrypter');
 
             return new Gaze(
                 resolver: $app->make(BinaryResolver::class),
                 process: $app->make(ProcessFactory::class),
-                timeoutSeconds: (int) $config->get('gaze.timeout_seconds', 30),
-                policyPath: (string) $config->get('gaze.policy_path', $app->basePath('policy.toml')),
-                maxBytes: is_numeric($config->get('gaze.max_bytes')) ? (int) $config->get('gaze.max_bytes') : null,
-                sessionTtlSeconds: is_numeric($config->get('gaze.session_ttl_seconds')) ? (int) $config->get('gaze.session_ttl_seconds') : null,
-                auditDbPath: is_string($rawAuditDbPath) && $rawAuditDbPath !== '' ? $rawAuditDbPath : null,
-                sessionScope: is_string($config->get('gaze.session_scope')) && $config->get('gaze.session_scope') !== '' ? $config->get('gaze.session_scope') : null,
-                locale: is_string($config->get('gaze.locale')) && $config->get('gaze.locale') !== '' ? $config->get('gaze.locale') : null,
-                rulepacks: self::stringList($config->get('gaze.rulepacks')),
-                rulepackPaths: self::stringList($config->get('gaze.rulepack_paths')),
-                safetyNet: (bool) $config->get('gaze.safety_net', false),
-                safetyNetDevice: is_string($config->get('gaze.safety_net_device')) && $config->get('gaze.safety_net_device') !== '' ? $config->get('gaze.safety_net_device') : null,
-                openaiFilterCommand: is_string($config->get('gaze.openai_filter_command')) && $config->get('gaze.openai_filter_command') !== '' ? $config->get('gaze.openai_filter_command') : null,
-                openaiFilterCheckpoint: is_string($config->get('gaze.openai_filter_checkpoint')) && $config->get('gaze.openai_filter_checkpoint') !== '' ? $config->get('gaze.openai_filter_checkpoint') : null,
-                openaiFilterOperatingPoint: is_string($config->get('gaze.openai_filter_operating_point')) && $config->get('gaze.openai_filter_operating_point') !== '' ? $config->get('gaze.openai_filter_operating_point') : null,
-                safetyNetTimeoutMs: is_numeric($config->get('gaze.safety_net_timeout_ms')) ? (int) $config->get('gaze.safety_net_timeout_ms') : null,
-                safetyNetInputLimitBytes: is_numeric($config->get('gaze.safety_net_input_limit_bytes')) ? (int) $config->get('gaze.safety_net_input_limit_bytes') : null,
-                safetyNetMode: is_string($config->get('gaze.safety_net_mode')) && $config->get('gaze.safety_net_mode') !== '' ? $config->get('gaze.safety_net_mode') : null,
-                safetyNetBackend: is_string($config->get('gaze.safety_net_backend')) && $config->get('gaze.safety_net_backend') !== '' ? $config->get('gaze.safety_net_backend') : null,
-                kijiBackend: is_string($config->get('gaze.kiji_backend')) && $config->get('gaze.kiji_backend') !== '' ? $config->get('gaze.kiji_backend') : null,
-                kijiDistilbertPrecision: is_string($config->get('gaze.kiji_distilbert_precision')) && $config->get('gaze.kiji_distilbert_precision') !== '' ? $config->get('gaze.kiji_distilbert_precision') : null,
-                kijiDistilbertCommand: is_string($config->get('gaze.kiji_distilbert_command')) && $config->get('gaze.kiji_distilbert_command') !== '' ? $config->get('gaze.kiji_distilbert_command') : null,
-                kijiDistilbertModelDir: is_string($config->get('gaze.kiji_distilbert_model_dir')) && $config->get('gaze.kiji_distilbert_model_dir') !== '' ? $config->get('gaze.kiji_distilbert_model_dir') : null,
-                safetyNetFallback: is_string($config->get('gaze.safety_net_fallback')) && $config->get('gaze.safety_net_fallback') !== '' ? $config->get('gaze.safety_net_fallback') : null,
-                restoreMode: is_string($config->get('gaze.restore_mode')) && $config->get('gaze.restore_mode') !== '' ? $config->get('gaze.restore_mode') : null,
-                restoreTelemetry: (bool) $config->get('gaze.restore_telemetry', false),
-                nerThreshold: is_numeric($config->get('gaze.ner_threshold')) ? (float) $config->get('gaze.ner_threshold') : null,
                 container: $app,
+                policyPath: is_string($policyPath) && $policyPath !== ''
+                    ? $policyPath
+                    : $app->basePath('policy.toml'),
+                options: GazeOptions::fromConfig($gazeConfig),
+                encrypter: $encrypter,
             );
         });
 
@@ -234,8 +227,80 @@ class GazeServiceProvider extends ServiceProvider implements DeferrableProvider
         });
     }
 
+    /**
+     * Bridge the nested `gaze.safety_net.*` group (v0.13+ config shape) to
+     * the deprecated flat root keys so BOTH spellings observe the same
+     * values at runtime:
+     *
+     *  - every flat key still null after the merge is back-filled from its
+     *    nested counterpart (an explicitly set flat key keeps winning for
+     *    legacy runtime overrides), and
+     *  - `gaze.safety_net` itself is collapsed back to the bool enable
+     *    switch, which is what every pre-existing reader —
+     *    `gaze:daemon:serve`, `gaze:doctor`, adopter code — treats it as.
+     *
+     * A pre-v0.13 published config (flat keys, bool `safety_net`) skips this
+     * entirely. The flat keys are deprecated; see UPGRADING.md.
+     */
+    private function normalizeSafetyNetConfig(): void
+    {
+        /** @var ConfigRepository $config */
+        $config = $this->app->make('config');
+        $group = $config->get('gaze.safety_net');
+
+        if (! is_array($group)) {
+            return;
+        }
+
+        $flatFromNested = [
+            'safety_net_backend' => $group['backend'] ?? null,
+            'safety_net_device' => $group['device'] ?? null,
+            'safety_net_timeout_ms' => $group['timeout_ms'] ?? null,
+            'safety_net_input_limit_bytes' => $group['input_limit_bytes'] ?? null,
+            'safety_net_mode' => $group['mode'] ?? null,
+            'safety_net_fallback' => $group['fallback'] ?? null,
+            'openai_filter_command' => $group['openai_filter']['command'] ?? null,
+            'openai_filter_checkpoint' => $group['openai_filter']['checkpoint'] ?? null,
+            'openai_filter_operating_point' => $group['openai_filter']['operating_point'] ?? null,
+            'kiji_backend' => $group['kiji']['backend'] ?? null,
+            'kiji_distilbert_precision' => $group['kiji']['distilbert_precision'] ?? null,
+            'kiji_distilbert_command' => $group['kiji']['distilbert_command'] ?? null,
+            'kiji_distilbert_model_dir' => $group['kiji']['distilbert_model_dir'] ?? null,
+        ];
+
+        foreach ($flatFromNested as $flatKey => $value) {
+            if ($value !== null && $config->get('gaze.'.$flatKey) === null) {
+                $config->set('gaze.'.$flatKey, $value);
+            }
+        }
+
+        $config->set('gaze.safety_net', (bool) ($group['enabled'] ?? false));
+    }
+
     public function boot(): void
     {
+        if (class_exists(AboutCommand::class)) {
+            // Lazy closure — only evaluated when `artisan about` actually
+            // runs. Reports the pinned version rather than spawning
+            // `gaze --version`: there is no cached installed-version value,
+            // and `about` must stay cheap (gaze:doctor probes the real
+            // binary and flags pin mismatches).
+            AboutCommand::add('Gaze', function (): array {
+                /** @var ConfigRepository $config */
+                $config = $this->app->make('config');
+                $policyPath = $config->get('gaze.policy_path');
+
+                return [
+                    'Binary' => $this->app->make(BinaryResolver::class)->resolveOrNull() ?? '<not installed>',
+                    'Binary Pin' => BinaryDownloader::PINNED_VERSION,
+                    'Policy Path' => is_string($policyPath) && $policyPath !== ''
+                        ? $policyPath
+                        : $this->app->basePath('policy.toml'),
+                    'Safety Net' => $config->get('gaze.safety_net') ? 'ON' : 'OFF',
+                ];
+            });
+        }
+
         if ($this->app->runningInConsole()) {
             $this->publishes([
                 __DIR__.'/../config/gaze.php' => $this->app->configPath('gaze.php'),
@@ -264,51 +329,5 @@ class GazeServiceProvider extends ServiceProvider implements DeferrableProvider
                 DaemonStatusCommand::class,
             ]);
         }
-    }
-
-    /**
-     * @return list<class-string|string>
-     */
-    public function provides(): array
-    {
-        return [
-            BinaryDownloader::class,
-            BinaryResolver::class,
-            Gaze::class,
-            GazeContract::class,
-            AuditService::class,
-            AuditServiceContract::class,
-            DaemonClientContract::class,
-            DaemonManager::class,
-            DaemonManagerContract::class,
-            'gaze.http_client',
-            LaravelNerFetcher::class,
-            NerFetcher::class,
-            NerManifest::class,
-            NerInstaller::class,
-            PolicyTomlPatcher::class,
-            SafetyNetConfigurator::class,
-            'gaze.encrypter',
-        ];
-    }
-
-    /**
-     * Normalize a config value to the non-empty list of strings the Gaze
-     * constructor expects, or null when the key is unset/empty. Non-string
-     * entries are dropped — they were already outside the declared
-     * list<string> contract and would only corrupt the CLI arguments built
-     * from them.
-     *
-     * @return non-empty-list<string>|null
-     */
-    private static function stringList(mixed $value): ?array
-    {
-        if (! is_array($value)) {
-            return null;
-        }
-
-        $strings = array_values(array_filter($value, is_string(...)));
-
-        return $strings === [] ? null : $strings;
     }
 }

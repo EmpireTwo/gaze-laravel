@@ -35,6 +35,44 @@ it('publishes config to application config path', function () {
     expect($published)->toBeArray()
         ->toHaveKeys(['binary', 'timeout_seconds', 'policy_path', 'blob_encryption_key', 'audit_db_path']);
 
+    // v0.13+ ships the safety-net family as a nested group (raw env reads,
+    // no casts — GazeOptions::fromConfig is the coercion layer). The
+    // deprecated flat root keys must NOT ship anymore.
+    expect($published)->toHaveKey('safety_net');
+    expect($published['safety_net'])->toBeArray()
+        ->toHaveKeys([
+            'enabled',
+            'backend',
+            'device',
+            'timeout_ms',
+            'input_limit_bytes',
+            'mode',
+            'fallback',
+            'openai_filter',
+            'kiji',
+        ]);
+    expect($published['safety_net']['openai_filter'])->toBeArray()
+        ->toHaveKeys(['command', 'checkpoint', 'operating_point']);
+    expect($published['safety_net']['kiji'])->toBeArray()
+        ->toHaveKeys(['backend', 'distilbert_precision', 'distilbert_command', 'distilbert_model_dir']);
+    foreach ([
+        'safety_net_backend',
+        'safety_net_device',
+        'safety_net_timeout_ms',
+        'safety_net_input_limit_bytes',
+        'safety_net_mode',
+        'safety_net_fallback',
+        'openai_filter_command',
+        'openai_filter_checkpoint',
+        'openai_filter_operating_point',
+        'kiji_backend',
+        'kiji_distilbert_precision',
+        'kiji_distilbert_command',
+        'kiji_distilbert_model_dir',
+    ] as $deprecatedFlatKey) {
+        expect($published)->not->toHaveKey($deprecatedFlatKey);
+    }
+
     expect($published)->toHaveKey('proxy');
     expect($published['proxy'])->toBeArray()
         ->toHaveKeys(['bind', 'session_ttl', 'rulepack', 'policy_path', 'upstream', 'stop_timeout']);
