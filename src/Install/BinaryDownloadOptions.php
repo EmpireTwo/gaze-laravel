@@ -8,9 +8,10 @@ namespace CertaMesh\Gaze\Install;
  * Framework-agnostic input for {@see BinaryDownloader::install()}.
  *
  * `releaseBase` MUST already be gated by the caller for its trust context. The
- * Composer plugin resolves it through {@see BinaryInstaller::resolveReleaseBase()}
- * (which pins the canonical base in production); the artisan path passes null so
- * the downloader falls back to the canonical hard-pin and exposes no override.
+ * opt-in Composer script hook resolves it through
+ * {@see BinaryInstaller::resolveReleaseBase()} (which pins the canonical base in
+ * production); the artisan path passes null so the downloader falls back to the
+ * canonical hard-pin and exposes no override.
  */
 final class BinaryDownloadOptions
 {

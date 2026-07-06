@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use CertaMesh\Gaze\Install\SafetyNetConfigStatus;
 use CertaMesh\Gaze\Install\SafetyNetConfigurator;
 
 function snc_tempEnv(string $contents = "APP_ENV=testing\n"): string
@@ -53,14 +54,14 @@ it('upserts keys idempotently, preserving unrelated keys', function () {
 
     try {
         $first = $configurator->apply(SafetyNetConfigurator::pairsFor('opf', null), force: false);
-        expect($first->status)->toBe('written');
+        expect($first->status)->toBe(SafetyNetConfigStatus::Written);
         expect(file_get_contents($env))
             ->toContain('GAZE_SAFETY_NET=true')
             ->toContain('GAZE_SAFETY_NET_BACKEND=openai-filter')
             ->toContain('APP_ENV=testing');
 
         $second = $configurator->apply(SafetyNetConfigurator::pairsFor('opf', null), force: false);
-        expect($second->status)->toBe('unchanged');
+        expect($second->status)->toBe(SafetyNetConfigStatus::Unchanged);
     } finally {
         @unlink($env);
         @unlink($env.'.backup');
@@ -128,7 +129,7 @@ it('creates .env when missing before upserting', function () {
     try {
         $result = (new SafetyNetConfigurator($env))->apply(SafetyNetConfigurator::pairsFor('opf', null), force: false);
 
-        expect($result->status)->toBe('written');
+        expect($result->status)->toBe(SafetyNetConfigStatus::Written);
         expect(is_file($env))->toBeTrue();
         expect(file_get_contents($env))->toContain('GAZE_SAFETY_NET_BACKEND=openai-filter');
     } finally {
