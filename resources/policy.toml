@@ -117,6 +117,16 @@ kind = "class"
 class = "custom:credit_card"
 action = "tokenize"
 
+# Upstream (>= v0.11.x) emits IBAN/credit-card spans whose collision cannot be
+# resolved (e.g. no locale anchor cue loaded) under this fail-closed family
+# class instead of custom:iban / custom:credit_card. Without this rule the
+# default `preserve` would let IBANs through unredacted — never-leak violation
+# (see CertaMesh/gaze#360).
+[[rule]]
+kind = "class"
+class = "custom:family:payment-card-or-iban"
+action = "tokenize"
+
 [[rule]]
 kind = "class"
 class = "custom:ip_address"

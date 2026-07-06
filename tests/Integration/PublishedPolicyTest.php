@@ -127,12 +127,7 @@ it('redacts IBANs via the core rulepack', function () {
     expect($session->cleanText)
         ->not->toContain('DE89370400440532013000')
         ->not->toContain('GB29NWBK60161331926819');
-})->skip(
-    'TODO(https://github.com/CertaMesh/gaze-laravel/issues/141): suspected upstream contract change - '
-    .'v0.11.3 emits IBAN detections as custom:family:payment-card-or-iban (collision-family), which '
-    .'resources/policy.toml has no rule for, so IBANs currently pass through UNREDACTED. '
-    .'Needs a policy fix + upstream question; do not delete this case.'
-);
+});
 
 it('redacts symbol-currency amounts ($/€/£) via the published policy', function () {
     $session = $this->app->make(Gaze::class)->clean('Paid $3,500.00 up front and 5000€ on delivery.');
