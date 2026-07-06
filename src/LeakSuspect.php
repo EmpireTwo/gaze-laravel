@@ -7,7 +7,7 @@ namespace CertaMesh\Gaze;
 /**
  * One suspected leak reported by the upstream observer-only safety net.
  *
- * Mirrors the upstream `LeakSuspectResponse` shape (gaze v0.11.3,
+ * Mirrors the upstream `LeakSuspectResponse` shape (gaze v0.12.0,
  * crates/gaze-cli/src/pipeline/run.rs). Every field here is METADATA — by
  * upstream design the leak report never serialises source text or byte offsets:
  * `rawLabel` is the backend's own category label ("private_person"), never the
