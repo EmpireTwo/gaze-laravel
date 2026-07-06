@@ -42,14 +42,18 @@ bundled = ["core"]
 # threshold = 0.7
 
 # Money amounts. Currency token (€/$/£/EUR/USD/GBP) on either side of digits
-# with optional thousand-separator + decimal groups. Word boundaries (\b) prevent
-# matching inside identifiers (e.g. abc5000EURdef stays preserved because c↔5 has no \b).
-# Fixes the `\d{1,3}` thousand-separator bug - `5000€` tokenizes whole.
+# with optional thousand-separator + decimal groups. \b guards only the
+# digit/alpha edges — never the symbol side: \b next to a non-word character
+# (€/$/£) only matches when flanked by a word character, so the old
+# `\b(...€|$...)\b` shape silently never matched symbol amounts (`5000€`,
+# `$3,500.00` leaked; see #141 and the "\b next to non-word characters"
+# pitfall in upstream docs/reference/policy.md). Symbols delimit themselves;
+# identifiers stay preserved because c↔5 in abc5000EURdef has no \b.
 [[policy.custom_recognizers]]
 kind = "regex"
 name = "money_amount"
 class = "custom:amount"
-pattern = '(?i)\b(?:(?:€|\$|£|EUR|USD|GBP)\s?\d+(?:[.,]\d+)*|\d+(?:[.,]\d+)*\s?(?:€|\$|£|EUR|USD|GBP))\b'
+pattern = '(?i)(?:[€$£]\s?\d+(?:[.,]\d+)*\b|\b(?:EUR|USD|GBP)\s?\d+(?:[.,]\d+)*\b|\b\d+(?:[.,]\d+)*\s?[€$£]|\b\d+(?:[.,]\d+)*\s?(?:EUR|USD|GBP)\b)'
 
 # Invoice / order / purchase-order numbers. Context-anchored: requires a
 # trigger word (Rechnung/Rg/Invoice/INV/Order/PO/Auftrag/Bestellung) before

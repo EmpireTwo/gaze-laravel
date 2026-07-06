@@ -56,12 +56,11 @@ it('redacts the German fixture across email + invoice + amount + org + location 
     $session = $gaze->clean($de);
 
     // Raw-leak negative: clean text must not contain any sensitive substring.
-    // KNOWN GAP (#141): the IBAN 'DE89370400440532013000' is NOT asserted here
-    // because v0.11.3 emits IBANs as custom:family:payment-card-or-iban, which
-    // the published policy does not tokenize — see the dedicated skipped case
-    // below and https://github.com/CertaMesh/gaze-laravel/issues/141.
+    // The #141 IBAN leak (collision-family class) is closed by the policy's
+    // family rule and asserted here again alongside its dedicated case below.
     expect($session->cleanText)
         ->not->toContain('RE-2026-0042')
+        ->not->toContain('DE89370400440532013000')
         ->not->toContain('1.500,00 EUR')
         ->not->toContain('Acme GmbH')
         ->not->toContain('Musterstraße 12')
@@ -94,12 +93,13 @@ it('redacts the English fixture across email + invoice + amount + org + location
     $gaze = $this->app->make(Gaze::class);
     $session = $gaze->clean($en);
 
-    // KNOWN GAPS (#141): '$3,500.00' (symbol-currency amounts no longer match
-    // under v0.11.3's strict \b semantics) and the IBAN 'GB29NWBK60161331926819'
-    // (collision-family class rename) are NOT asserted here — see the dedicated
-    // skipped cases and https://github.com/CertaMesh/gaze-laravel/issues/141.
+    // The two #141 leaks ('$3,500.00' symbol-amount, 'GB29NWBK60161331926819'
+    // collision-family IBAN) are closed by the policy fixes and asserted here
+    // again alongside their dedicated cases.
     expect($session->cleanText)
         ->not->toContain('INV-2026-09812')
+        ->not->toContain('$3,500.00')
+        ->not->toContain('GB29NWBK60161331926819')
         ->not->toContain('Acme Inc.')
         ->not->toContain('10 Downing Street')
         ->not->toContain('+1 212 555 0100')
@@ -135,9 +135,4 @@ it('redacts symbol-currency amounts ($/€/£) via the published policy', functi
     expect($session->cleanText)
         ->not->toContain('$3,500.00')
         ->not->toContain('5000€');
-})->skip(
-    'TODO(https://github.com/CertaMesh/gaze-laravel/issues/141): suspected upstream regression - '
-    .'under v0.11.3 strict \b semantics the published money_amount pattern no longer matches '
-    .'symbol-form currencies, so these amounts pass through UNREDACTED (alpha codes like EUR/GBP '
-    .'still work, see PolicyRegexBoundaryTest). Needs a policy pattern fix; do not delete this case.'
-);
+});

@@ -184,9 +184,31 @@ action = "tokenize"
 ```
 
 Whether the family class name is a stable upstream contract is tracked in
-[CertaMesh/gaze#360](https://github.com/CertaMesh/gaze/issues/360); the
-related symbol-currency (`5000€`, `$3,500.00`) leak is still open pending
-[CertaMesh/gaze#361](https://github.com/CertaMesh/gaze/issues/361).
+[CertaMesh/gaze#360](https://github.com/CertaMesh/gaze/issues/360). Upstream
+now warns on `gaze clean` stderr when an uncovered family class could leak.
+
+### Published policies: fix the `money_amount` symbol-boundary pattern (leak fix)
+
+The shipped policy's `money_amount` pattern wrapped its whole alternation in
+`\b...\b`. `\b` adjacent to a non-word character (`€`, `$`, `£`) only matches
+when flanked by a word character, so the symbol-form branches never matched —
+`5000€` and `$3,500.00` passed through **unredacted** in every gaze version
+(upstream forensics: [CertaMesh/gaze#361](https://github.com/CertaMesh/gaze/issues/361),
+outputs byte-identical from v0.5.2 to v0.11.x). Note for incident bookkeeping:
+this was a day-one policy bug, not an upstream regression — if you relied on
+symbol-amount redaction, it never worked.
+
+The shipped `resources/policy.toml` now guards only the digit/alpha edges with
+`\b` and lets symbols delimit themselves. If you published the policy, replace
+your `money_amount` pattern with:
+
+```toml
+pattern = '(?i)(?:[€$£]\s?\d+(?:[.,]\d+)*\b|\b(?:EUR|USD|GBP)\s?\d+(?:[.,]\d+)*\b|\b\d+(?:[.,]\d+)*\s?[€$£]|\b\d+(?:[.,]\d+)*\s?(?:EUR|USD|GBP)\b)'
+```
+
+Background and the general rewrite rule ("`\b` next to `\d`/`\w` edges only,
+never next to the symbol") are documented in upstream
+[`docs/reference/policy.md`](https://github.com/CertaMesh/gaze/blob/main/docs/reference/policy.md).
 
 ## v0.11.1 → v0.12.0
 
