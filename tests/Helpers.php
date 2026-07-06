@@ -94,44 +94,6 @@ function gl_nerChecksumFixture(): string
     ]);
 }
 
-/** @param array<string, string> $files */
-function gl_buildFixtureTarGz(string $tmpDir, string $stagingDir, array $files): string
-{
-    if (is_dir($stagingDir)) {
-        gl_recursiveRemove($stagingDir);
-    }
-
-    mkdir($stagingDir, 0755, true);
-    foreach ($files as $name => $contents) {
-        file_put_contents($stagingDir.'/'.$name, $contents);
-    }
-
-    $tarPath = $tmpDir.'/pkg.tar';
-    if (file_exists($tarPath)) {
-        unlink($tarPath);
-    }
-    if (file_exists($tarPath.'.gz')) {
-        unlink($tarPath.'.gz');
-    }
-
-    $tar = new PharData($tarPath);
-    foreach (array_keys($files) as $name) {
-        $tar->addFile($stagingDir.'/'.$name, $name);
-    }
-    unset($tar);
-
-    $gzPath = $tarPath.'.gz';
-    $tarBytes = file_get_contents($tarPath);
-    if ($tarBytes === false) {
-        throw new RuntimeException('could not read fixture tar');
-    }
-
-    Phar::unlinkArchive($tarPath);
-    file_put_contents($gzPath, gzencode($tarBytes, 9));
-
-    return $gzPath;
-}
-
 /**
  * Open a writable in-memory stream pre-seeded with the given content.
  * Used by the daemon unit tests so PHPStan sees a non-false resource.

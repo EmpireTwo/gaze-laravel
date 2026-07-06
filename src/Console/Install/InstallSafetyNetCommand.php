@@ -6,6 +6,7 @@ namespace CertaMesh\Gaze\Console\Install;
 
 use CertaMesh\Gaze\Console\Concerns\BuildsBinaryArgv;
 use CertaMesh\Gaze\Install\KijiArtifacts;
+use CertaMesh\Gaze\Install\SafetyNetConfigStatus;
 use CertaMesh\Gaze\Install\SafetyNetConfigurator;
 use CertaMesh\Gaze\Install\SafetyNetConfiguratorResult;
 use Illuminate\Console\Command;
@@ -91,7 +92,7 @@ final class InstallSafetyNetCommand extends Command
             return self::FAILURE;
         }
 
-        $result->status === 'unchanged'
+        $result->status === SafetyNetConfigStatus::Unchanged
             ? $this->components->info("safety-net already wired ({$backend}); no change")
             : $this->components->info("safety-net wired ({$backend}) → {$result->envPath}");
 

@@ -27,16 +27,46 @@ namespace CertaMesh\Gaze\Testing;
 final class FakeTokenizer
 {
     /**
-     * Token-shaped alternatives first (so `email1@example.test` hits its
-     * format-preserving branch before the generic email alternative at the
-     * end can claim it).
+     * The alternation branches of the token grammar, in match-priority
+     * order: token-shaped alternatives first (so `email1@example.test`
+     * hits its format-preserving branch before the generic email branch
+     * at the end can claim it), specific class lists before the generic
+     * catch-alls. Composed into the final pattern by {@see pattern()}.
+     *
+     * @var list<string>
      */
-    private const TOKEN_PATTERN = '/<(?:Email|Name|Location|Organization)_\d+>|<Custom:[a-z0-9_]*_\d+>|\b(?:email|name|location|organization)_\d+\b|\bcustom:[a-z0-9_]*_\d+\b|\bemail\d+@example\.test\b|<[A-Z][a-zA-Z]+_\d+>|<[a-z][a-z_]+_\d+>|\b[A-Z][a-zA-Z]+_\d+\b|\b[a-z][a-z_]+_\d+\b|[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/';
+    private const TOKEN_BRANCHES = [
+        // Wrapped known-class tokens: <Email_1>, <Name_2>, <Location_3>, <Organization_4>
+        '<(?:Email|Name|Location|Organization)_\d+>',
+        // Wrapped custom tokens: <Custom:order_id_9>
+        '<Custom:[a-z0-9_]*_\d+>',
+        // Bare known-class tokens: email_1, name_2, location_3, organization_4
+        '\b(?:email|name|location|organization)_\d+\b',
+        // Bare custom tokens: custom:sku_3
+        '\bcustom:[a-z0-9_]*_\d+\b',
+        // Format-preserving fake emails: email2@example.test
+        '\bemail\d+@example\.test\b',
+        // Wrapped generic uppercase-class tokens: <Phone_3>
+        '<[A-Z][a-zA-Z]+_\d+>',
+        // Wrapped generic lowercase-class tokens: <phone_number_3>
+        '<[a-z][a-z_]+_\d+>',
+        // Bare generic uppercase tokens: Phone_3
+        '\b[A-Z][a-zA-Z]+_\d+\b',
+        // Bare generic lowercase tokens: phone_number_3
+        '\b[a-z][a-z_]+_\d+\b',
+        // Real email addresses (last resort — every token shape above wins first)
+        '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}',
+    ];
+
+    private static function pattern(): string
+    {
+        return '/'.implode('|', self::TOKEN_BRANCHES).'/';
+    }
 
     public static function mask(string $text): string
     {
         $cleanText = preg_replace_callback(
-            self::TOKEN_PATTERN,
+            self::pattern(),
             static function (array $match): string {
                 $token = $match[0];
 

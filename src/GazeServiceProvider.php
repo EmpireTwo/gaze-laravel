@@ -26,6 +26,7 @@ use CertaMesh\Gaze\Contracts\AuditService as AuditServiceContract;
 use CertaMesh\Gaze\Contracts\DaemonManager as DaemonManagerContract;
 use CertaMesh\Gaze\Contracts\Gaze as GazeContract;
 use CertaMesh\Gaze\Daemon\Contracts\DaemonClientContract;
+use CertaMesh\Gaze\Daemon\DaemonArgv;
 use CertaMesh\Gaze\Daemon\DaemonClient;
 use CertaMesh\Gaze\Daemon\DaemonManager;
 use CertaMesh\Gaze\Exceptions\GazeDaemonFeatureUnsupportedException;
@@ -126,16 +127,9 @@ class GazeServiceProvider extends ServiceProvider implements DeferrableProvider
                 $binaryPath = $app->make(BinaryResolver::class)->resolve();
             }
 
-            $flags = [];
-            $flags[] = '--policy='.$policyPath;
-            $idle = $config->get('gaze.daemon.idle_timeout_s');
-            if (is_numeric($idle)) {
-                $flags[] = '--idle-timeout='.((int) $idle);
-            }
-            $auditDbPath = $config->get('gaze.daemon.audit_db_path');
-            if (is_string($auditDbPath) && $auditDbPath !== '') {
-                $flags[] = '--audit-db='.$auditDbPath;
-            }
+            // Shared assembler (also backs `gaze:daemon:serve`) — full
+            // upstream flag parity on the facade spawn path, by construction.
+            $flags = DaemonArgv::flags($config);
 
             $requestTimeoutMs = $config->get('gaze.daemon.request_timeout_ms', 5000);
             $requestTimeoutMs = is_numeric($requestTimeoutMs) ? (int) $requestTimeoutMs : 5000;
