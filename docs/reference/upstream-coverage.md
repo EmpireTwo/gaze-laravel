@@ -59,6 +59,9 @@ Living parity checklist for upstream `CertaMesh/gaze` v0.12.0.
 | `--format=json` | Always set by `Gaze::restore()` |
 | `--max-bytes` | `gaze.max_bytes` / `GAZE_MAX_BYTES` |
 | `--restore-mode` | `gaze.restore_mode` / `GAZE_RESTORE_MODE` |
+| `--telemetry` | `gaze.restore_telemetry` / `GAZE_RESTORE_TELEMETRY` — see [Restore telemetry (v0.11.x)](#restore-telemetry-v011x) |
+| `--audit-db` | `gaze.audit_db_path` / `GAZE_AUDIT_DB_PATH` — forwarded on restore only when `gaze.restore_telemetry` is on (an audit sink with no telemetry request has no rows to write) |
+| `--policy` (restore) | **No surface needed** — upstream documents it as an alias for `--restore-mode` used by restore-boundary telemetry. The adapter forwards the canonical spelling (row above); the alias adds no capability. |
 
 ## Exception Variants
 
@@ -271,7 +274,8 @@ supervision is OS-owned. Use systemd / Horizon / supervisord primitives.
 
 Both daemon spawn paths — `gaze:daemon:serve` AND the `Gaze::daemon()`
 Facade hot path (`DaemonClient` spawn) — forward **every** flag the
-pinned v0.11.1 `gaze daemon --help` surface accepts. Both paths build
+pinned v0.12.0 `gaze daemon --help` surface accepts (23 flags, re-verified
+flag-by-flag against the v0.12.0 source). Both paths build
 their argv from the same assembler (`Daemon\DaemonArgv`), so they cannot
 drift. Daemon-specific knobs live under `gaze.daemon.*`; the shared
 pipeline flags source the same top-level `gaze.*` keys the one-shot
@@ -424,6 +428,40 @@ like the v0.8.0 recognizer columns:
 > **restore-decision / unknown-token audit trails, NOT outbound-DLP fresh-PII
 > detection.** Do NOT advertise the DLP use-case.
 
+## Clean stats projection (v0.12.0)
+
+`gaze clean --format=json` emits a `stats` object alongside the redacted text.
+The adapter previously projected **only** `stats.detections` and dropped the
+rest — so an adopter could not tell from PHP whether their `GAZE_LOCALE` chain
+or their rulepack dictionaries had actually reached detection. Every remaining
+field is now surfaced on `GazeSession`.
+
+The session is a **flattened** projection, not a nested `stats` DTO: each
+upstream field lands on exactly one property, so there is never a second way to
+read the same value (the architecture-debt lesson from L-3).
+
+| Upstream `stats` field | Laravel surface |
+|---|---|
+| `detections` | `GazeSession::$detections` (`int`) — unchanged |
+| `locale_chain` | `GazeSession::$localeChain` (`list<string>`, priority ordered) + `GazeSession::activeLocale()` for the head of the chain |
+| `dictionaries_loaded[]` | `GazeSession::$dictionariesLoaded` (`list<CertaMesh\Gaze\LoadedDictionary>`; `$name`, `$termCount`, `$source`) |
+| `context_source` | `GazeSession::$contextSource` (`?string`) |
+
+Notes:
+
+- **Metadata only.** Counts, locale tags, dictionary names and provenance
+  labels. No dictionary terms and no source text cross the surface — a
+  dictionary's entries are exactly the values an adopter is redacting.
+- **`context_source` is always null through this package.** Upstream sets it to
+  `'cli'` only when `--context-json` is passed, and that flag is a documented
+  [deferral](#deferred). The field ships forward-compatible rather than faked,
+  mirroring the restore-telemetry posture.
+- **Shape drift never fails a clean.** Missing, absent, or wrongly-typed stats
+  degrade to `0` / `[]` / `null`; non-string locale tags and non-object
+  dictionary rows are dropped rather than coerced.
+- The daemon path is unaffected: the upstream JSONL clean reply carries
+  `{session_id, clean_text, manifest, tokens}` and no `stats` object.
+
 ## Clean leak report & trust state (v0.11.x)
 
 `gaze clean --format=json` always emits a `leak_report` object — the upstream
@@ -468,7 +506,7 @@ flow through (enforced by a hostile-fixture test).
 
 | Upstream surface | Reason |
 |---|---|
-| Per-detection byte spans (`start` / `end`) on `gaze clean --format=json` entries | **Upstream feature request.** As of the v0.11.3 pin, clean `--format=json` `entries[]` keys are exactly `{class, raw, token, family}` — there are **no byte offsets**. Computing span positions in PHP is a NORTH_STAR non-goal (it would re-derive detection geometry outside upstream). Blocked on upstream adding per-detection byte spans (start/end) to the clean `--format=json` contract; until then `Gaze::mask()` ships on the collision-safe token map instead. A `length()` / offset accessor on `Entry`/`GazeSession` lands as an additive MINOR once upstream emits the spans. |
+| Per-detection byte spans (`start` / `end`) on `gaze clean --format=json` entries | **Upstream feature request.** Re-verified at the v0.12.0 pin: clean `--format=json` `entries[]` keys are exactly `{class, raw, token, family}` (`EntryJson`, crates/gaze-cli/src/pipeline/run.rs) — there are **no byte offsets**. Computing span positions in PHP is a NORTH_STAR non-goal (it would re-derive detection geometry outside upstream). Blocked on upstream adding per-detection byte spans (start/end) to the clean `--format=json` contract; until then `Gaze::mask()` ships on the collision-safe token map instead. A `length()` / offset accessor on `Entry`/`GazeSession` lands as an additive MINOR once upstream emits the spans. |
 | `--context-json` | P1 design item; needs PHP API design before exposure. |
 | `gaze mcp install --client=<name>` / `gaze mcp doctor` / `gaze mcp serve` | Opt-in `mcp` feature in upstream v0.7.0; needs `php artisan gaze:mcp:*` artisan surface design. Tracked separately. |
 | `gaze-mcp-bridge` (#330) | MCP server lifecycle — explicit NORTH_STAR non-goal. Not a Laravel idiom; lives upstream. Tracked with the other `gaze mcp *` surfaces above. |

@@ -4,6 +4,38 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
 
 ## [Unreleased]
 
+### Added
+
+- **The full upstream clean `stats` object is projected onto `GazeSession`.**
+  `gaze clean --format=json` emits
+  `stats { detections, locale_chain, dictionaries_loaded, context_source }`;
+  the adapter kept only `detections` and dropped the rest, so a PHP caller had
+  no way to see which locale chain or which dictionaries the binary actually
+  resolved. New surfaces: `GazeSession::$localeChain` (`list<string>`, priority
+  ordered) plus `GazeSession::activeLocale()` for its head,
+  `GazeSession::$dictionariesLoaded` (`list<CertaMesh\Gaze\LoadedDictionary>` —
+  `$name`, `$termCount`, `$source`), and `GazeSession::$contextSource`.
+  Additive: the new constructor parameters are appended with defaults, so every
+  existing `new GazeSession(...)` call site is unaffected. Metadata only — no
+  dictionary terms and no source text cross the surface. Parsing is tolerant
+  like the `entries` / `leak_report` projections: a missing or malformed `stats`
+  shape degrades to `0` / `[]` / `null` and never fails a `clean()`.
+  `$contextSource` is always `null` through this package (`--context-json`
+  stays a documented deferral) — shipped forward-compatible rather than faked.
+
+### Changed
+
+- Docs: `docs/reference/upstream-coverage.md` gains a *Clean stats projection
+  (v0.12.0)* section, and its **Restore Flags** table now lists the
+  `--telemetry` and `--audit-db` rows the adapter has forwarded since v0.11.x
+  (plus upstream's `--policy` restore alias, marked *no surface needed*) — the
+  table had been three rows behind the implementation. Re-verified at the
+  v0.12.0 pin: `entries[]` still carries no byte offsets (the span deferral
+  holds), and both daemon spawn paths still cover all 23 `gaze daemon` flags
+  (the parity note said "v0.11.1"). The architecture diagram's `GazeSession`
+  shape now shows `leakReport` and the stats fields instead of a v0.11-era
+  four-field record.
+
 ## [0.13.0] - 2026-07-06
 
 ### Changed (BREAKING)

@@ -60,6 +60,19 @@ coverage verdict (`Verified` / `Unverified` / `Suspect`) and
 [security model](../explanation/security.md) and the trust check in
 [`examples/clean-before-openai.php`](../../examples/clean-before-openai.php).
 
+The session also reports what the binary actually resolved for the call, which
+is the fastest way to confirm your locale and rulepack configuration reached
+detection rather than silently falling back:
+
+```php
+$session->activeLocale();        // 'de-DE' — head of the resolved chain
+$session->localeChain;           // ['de-DE', 'en'] — priority ordered
+$session->dictionariesLoaded;    // list<LoadedDictionary>: name, termCount, source
+```
+
+Both are empty when the binary emits no chain; see
+[upstream coverage § Clean stats projection](../reference/upstream-coverage.md#clean-stats-projection-v0120).
+
 → [Blob lifecycle, Livewire patterns, queue jobs, conversational-loop guidance](../../README.md#blob-lifecycle)
 
 > **Heads up — one session-id per isolation boundary.** Once you move beyond

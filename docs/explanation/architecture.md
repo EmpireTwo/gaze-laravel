@@ -23,7 +23,9 @@ Gaze::clean(text)
   ├─ assertInput()           – UTF-8 + size pre-flight (PHP side)
   ├─ BinaryResolver::resolve()
   ├─ ProcessFactory::run()   – gaze clean --policy=… --format=json [v0.6.4 flags]
-  └─ GazeSession             – { cleanText, ciphertext:EncryptedBlob, detections, entries:list<Entry> }
+  └─ GazeSession             – { cleanText, ciphertext:EncryptedBlob, detections, entries:list<Entry>,
+  │                              leakReport:?LeakReport, localeChain:list<string>,
+  │                              dictionariesLoaded:list<LoadedDictionary>, contextSource:?string }
 
 Gaze::restore(session, text)
   ├─ EncryptedBlob::decryptedBlob()
@@ -74,10 +76,15 @@ Gaze::clean(text)
   │                                 uses gaze.encrypter (GAZE_ENCRYPTION_KEY
   │                                 or APP_KEY fallback, AES-256-CBC, fresh IV)
   │                                         │
-  └─ GazeSession { cleanText, ciphertext:EncryptedBlob, detections, entries:list<Entry> }
-       ↑ entries[] surfaces per-rule detection metadata (class, raw, token, family)
-         when the upstream CLI emits an `entries` JSON field. Defaults to [] for
-         current upstream releases where the field is absent.
+  └─ GazeSession { cleanText, ciphertext:EncryptedBlob, detections, entries:list<Entry>,
+                   leakReport:?LeakReport, localeChain:list<string>,
+                   dictionariesLoaded:list<LoadedDictionary>, contextSource:?string }
+       ↑ entries[] surfaces per-rule detection metadata (class, raw, token, family).
+         leakReport carries upstream's verification signal (coverageState() /
+         hasSuspectedLeak()); localeChain, dictionariesLoaded and contextSource are
+         the rest of the upstream `stats` object. Every one of them degrades to a
+         null / empty default if the binary omits its field — a shape drift never
+         fails a clean.
        │
        │  (stored in queue payload, cache, or passed to restore call)
        │

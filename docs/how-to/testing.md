@@ -28,6 +28,10 @@ it('redacts user input before forwarding to the LLM', function () {
   - `cleanText`: the input with token-pattern substitutions applied (see "Token grammar" below).
   - `ciphertext`: a real `EncryptedBlob` wrapping a base64-encoded JSON payload of the original text — so `restore` round-trips correctly.
   - `detections`: always `1`.
+  - `leakReport`, `localeChain`, `dictionariesLoaded`, `contextSource`: left at their
+    empty defaults (`null` / `[]`). Seed them from a `cleanUsing()` closure that returns
+    your own `GazeSession` when a test asserts on the upstream `stats` / `leak_report`
+    projections.
 - `restore($session, $text)` — records the call and decodes the ciphertext to return the original `text` passed to `clean`.
 - `audit()` — returns a `FakeAuditService` that records purge calls without executing any process.
 
