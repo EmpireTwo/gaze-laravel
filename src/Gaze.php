@@ -103,15 +103,20 @@ class Gaze implements AuditRunner, GazeContract
 
         $result = $this->run($command, $text, 'clean');
 
-        /** @var array{clean_text:string,session_blob:string,stats?:array{detections?:int},entries?:list<array<string,mixed>>,leak_report?:array<string,mixed>} $decoded */
+        /** @var array{clean_text:string,session_blob:string,stats?:array<string,mixed>,entries?:list<array<string,mixed>>,leak_report?:array<string,mixed>} $decoded */
         $decoded = $this->decodeResponse($result->output(), 'clean');
+
+        $stats = is_array($decoded['stats'] ?? null) ? $decoded['stats'] : [];
 
         return new GazeSession(
             cleanText: $decoded['clean_text'],
             ciphertext: EncryptedBlob::wrap($decoded['session_blob'], $this->encrypter),
-            detections: (int) ($decoded['stats']['detections'] ?? 0),
+            detections: is_numeric($stats['detections'] ?? null) ? (int) $stats['detections'] : 0,
             entries: $this->mapEntries($decoded['entries'] ?? null),
             leakReport: $this->mapLeakReport($decoded['leak_report'] ?? null),
+            localeChain: $this->mapLocaleChain($stats['locale_chain'] ?? null),
+            dictionariesLoaded: $this->mapDictionaries($stats['dictionaries_loaded'] ?? null),
+            contextSource: is_string($stats['context_source'] ?? null) ? $stats['context_source'] : null,
         );
     }
 
@@ -147,6 +152,53 @@ class Gaze implements AuditRunner, GazeContract
     private function mapLeakReport(mixed $raw): ?LeakReport
     {
         return is_array($raw) ? LeakReport::fromArray($raw) : null;
+    }
+
+    /**
+     * Project `stats.locale_chain` — the priority-ordered locale fallback chain
+     * the binary actually resolved. Non-string members are dropped rather than
+     * coerced: a chain is only useful if every tag in it is one the binary
+     * really applied.
+     *
+     * @return list<string>
+     */
+    private function mapLocaleChain(mixed $raw): array
+    {
+        if (! is_array($raw)) {
+            return [];
+        }
+
+        $chain = [];
+        foreach ($raw as $tag) {
+            if (is_string($tag) && $tag !== '') {
+                $chain[] = $tag;
+            }
+        }
+
+        return $chain;
+    }
+
+    /**
+     * Project `stats.dictionaries_loaded` into typed {@see LoadedDictionary}
+     * rows. Mirrors mapEntries(): non-array members are skipped, a missing or
+     * malformed list degrades to empty.
+     *
+     * @return list<LoadedDictionary>
+     */
+    private function mapDictionaries(mixed $raw): array
+    {
+        if (! is_array($raw)) {
+            return [];
+        }
+
+        $dictionaries = [];
+        foreach ($raw as $item) {
+            if (is_array($item)) {
+                $dictionaries[] = LoadedDictionary::fromArray($item);
+            }
+        }
+
+        return $dictionaries;
     }
 
     /**
