@@ -27,8 +27,14 @@ final class ProxyServeCommand extends ProxyCommand
     {
         $argv = $this->launchFlags($config);
 
+        // Upstream spells this `--_foreground-daemon` (clap `hide = true`) —
+        // it is the re-exec contract `gaze proxy start` uses when it detaches,
+        // not a cosmetic alias. Forwarding the underscore-less spelling made
+        // clap reject the argv, so the artisan flag could never start a proxy.
+        // The artisan option keeps the clean name; only the wire spelling
+        // carries the leading underscore.
         if ((bool) $this->option('foreground-daemon')) {
-            $argv[] = '--foreground-daemon';
+            $argv[] = '--_foreground-daemon';
         }
 
         return $argv;

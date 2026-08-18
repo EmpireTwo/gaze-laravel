@@ -11,7 +11,7 @@ Living parity checklist for upstream `CertaMesh/gaze` v0.12.0.
 | `gaze clean` | `CertaMesh\Gaze\Gaze::clean()` |
 | `gaze clean` (one-way output reshape) | `CertaMesh\Gaze\Gaze::mask()` — redacts the clean inventory into masked labels (`[Class]` default, or a `callable(Entry): string`). NON-reversible: no session blob, no `restore()` counterpart. Adds no detection — reshapes `clean()`'s tokens only. |
 | `gaze restore` | `CertaMesh\Gaze\Gaze::restore()` |
-| `gaze audit query` | `Gaze::audit()->query()` — fluent builder covering all 11 upstream filter flags (see [Audit query/export filters](#audit-queryexport-filters-v011x)) |
+| `gaze audit query` | `Gaze::audit()->query()` — fluent builder covering all 12 upstream filter flags (see [Audit query/export filters](#audit-queryexport-filters-v011x)) |
 | `gaze audit export` | `Gaze::audit()->query()->…->export(?string $output, string $format = 'jsonl')` — reuses the query builder's filter state (upstream applies the identical filter flags to both subcommands) |
 | `gaze audit purge` | `Gaze::audit()->purge()` + `php artisan gaze:audit:purge` (scheduler-friendly; `--before` ISO 8601/relative, `--audit-db`, `--dry-run`, `--force`) |
 | `gaze audit safety-net query` | `Gaze::audit()->safetyNetQuery()` — flattened name; `query` is upstream's only `safety-net` subcommand |
@@ -198,7 +198,7 @@ the adopter quickstart, security notes, and the doctor probe.
 | `--timeout` (stop / restart) | `gaze.proxy.stop_timeout` / `GAZE_PROXY_STOP_TIMEOUT` (default `10s`) |
 | `--force` (stop / restart) | `--force` artisan flag |
 | `--follow` (logs) | `--follow` artisan flag |
-| `--foreground-daemon` (serve) | `--foreground-daemon` artisan flag |
+| `--_foreground-daemon` (serve) | `--foreground-daemon` artisan flag on `gaze:proxy:serve`. Upstream hides the flag and spells it with a leading underscore (it is the re-exec contract `gaze proxy start` uses when detaching); the adapter keeps the clean artisan name and forwards the underscored wire spelling. |
 
 ## SafetyNet backend & mode reshape (v0.8.1)
 

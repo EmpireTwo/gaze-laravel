@@ -23,6 +23,17 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
   `$contextSource` is always `null` through this package (`--context-json`
   stays a documented deferral) — shipped forward-compatible rather than faked.
 
+### Fixed
+
+- **`php artisan gaze:proxy:serve --foreground-daemon` forwarded a flag the
+  binary rejects.** Upstream spells it `--_foreground-daemon`
+  (`#[arg(long = "_foreground-daemon", hide = true)]` — the re-exec contract
+  `gaze proxy start` uses when it detaches); the adapter emitted
+  `--foreground-daemon`, so clap failed the argv and the command could never
+  start a proxy under the systemd/launchd contract. The artisan option keeps
+  its clean name — only the wire spelling changed — and the argv test now pins
+  the underscored spelling instead of asserting the adapter's own typo.
+
 ### Changed
 
 - Docs: `docs/reference/upstream-coverage.md` gains a *Clean stats projection
@@ -31,8 +42,10 @@ All notable changes to `certamesh/gaze-laravel` (formerly `empiretwo/gaze-larave
   (plus upstream's `--policy` restore alias, marked *no surface needed*) — the
   table had been three rows behind the implementation. Re-verified at the
   v0.12.0 pin: `entries[]` still carries no byte offsets (the span deferral
-  holds), and both daemon spawn paths still cover all 23 `gaze daemon` flags
-  (the parity note said "v0.11.1"). The architecture diagram's `GazeSession`
+  holds), both daemon spawn paths still cover all 23 `gaze daemon` flags (the
+  parity note said "v0.11.1"), the `gaze audit query` filter count is 12 rather
+  than the claimed 11, and upstream still stubs `gaze proxy install-launchd` /
+  `install-systemd-user` (that deferral holds too). The architecture diagram's `GazeSession`
   shape now shows `leakReport` and the stats fields instead of a v0.11-era
   four-field record.
 
