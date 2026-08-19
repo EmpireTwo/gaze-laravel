@@ -313,7 +313,9 @@ overridden per-invocation on `gaze:daemon:serve`.
 | n/a (adapter spawn stderr) | `gaze.daemon.stderr_path` / `GAZE_DAEMON_STDERR_PATH` | — |
 
 Note: `--kiji-distilbert-precision` exists on `gaze clean` but NOT on
-`gaze daemon` in v0.11.1, so neither daemon spawn path forwards it.
+`gaze daemon` at the v0.12.0 pin, so neither daemon spawn path forwards it.
+Upstream closes this asymmetry post-0.12.0 — see
+[Pending upstream](#pending-upstream-unreleased-at-the-v0120-pin).
 
 Intentionally NOT shipped: `gaze.daemon.events.enabled` (reserved
 P1-violation), `gaze.daemon.extra_flags` (P3 velocity signal),
@@ -501,6 +503,23 @@ flow through (enforced by a hostile-fixture test).
 > safety-net-openai`). The four coverage-gap counts come from the core pipeline
 > and are always present. This mirrors the restore-telemetry caveat: the surface
 > ships forward-compatible; do NOT advertise stock-CLI safety-net leak detection.
+
+## Pending upstream (unreleased at the v0.12.0 pin)
+
+Queued work for the **next** pin bump, read off upstream `main`'s `[Unreleased]`
+section. Nothing here is actionable while the pin is 0.12.0 — the flags do not
+exist in the pinned binary and clap would reject them — but recording the delta
+now is what makes the next release audit cheap (AGENTS.md § *Lockstep on
+releases*).
+
+| Upstream change (unreleased) | Adapter impact when the pin moves |
+|---|---|
+| `gaze daemon` gains the eight detection-surface flags only `gaze clean` accepted (upstream #446): `--safety-net-registry`, `--safety-net-add`, `--opf-locales`, `--opf-command`, `--opf-checkpoint`, `--kiji-distilbert-precision`, `--rulepack-bundled`, `--rulepack-path` | **Daemon flag parity is no longer 23/23.** `--kiji-distilbert-precision` and the rulepack pair have existing one-shot config keys (`gaze.kiji_distilbert_precision`, `gaze.rulepacks`, `gaze.rulepack_paths`) and should flow to `DaemonArgv` on the same shared-key rule the other pipeline flags follow; the registry family stays deferred on both paths until the registry surface itself is promoted. Update the note above and the Daemon Flags table together. |
+| Four new deterministic `safe_default` recognizers in the embedded `core` bundle: `url.anchored` (`custom:url`), `security_token.anchored` (`custom:security_token`), and the government-ID set `ssn.de_cue` / `tax_number.cue_anchored` / `driver_license.cue_anchored` / `national_id.cue_anchored` | **Detection-only, but check the shipped policy.** These fire for every adopter of the default bundle, so redaction gets stricter without any adapter change (no new flag, no new config key). The new `government-id` collision family (`ssn` 10 > `tax-number` 20 > `national-id` 30) is the thing to verify: re-run the uncovered-collision-family check (upstream #360) against `resources/policy.toml` at the bump, exactly as #151 did for `custom:family:payment-card-or-iban`, and add a fallback class if the family comes back uncovered. |
+| `gaze proxy` resolution fixes (rulepacks / dictionaries / policy on detached `start`), safety-net `resolve` correctness fixes | Passthrough — adopters inherit them by taking the pin. No CLI-contract change for the `gaze:proxy:*` artisans to track. |
+
+Re-read upstream's `[Unreleased]` at every bump; this table is a snapshot, not a
+subscription.
 
 ## Deferred
 
