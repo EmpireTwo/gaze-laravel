@@ -5,8 +5,9 @@ declare(strict_types=1);
 use CertaMesh\Gaze\Variant;
 
 /**
- * Source-of-truth fixture mirrored from upstream `crates/gaze-cli/src/error.rs`
- * for gaze v0.8.1. Each row pins one upstream `CliError` variant:
+ * Source-of-truth fixture mirrored from upstream `crates/gaze-cli/src/error.rs`,
+ * re-verified against gaze v0.12.0 (the pinned release). Each row pins one
+ * upstream `CliError` variant:
  *   - 0: enum case name on the PHP side
  *   - 1: exit bucket the upstream binary returns (`exit_code()`)
  *   - 2: minimal `{error, exit, ...}` JSON shape upstream emits on stderr
@@ -19,6 +20,22 @@ use CertaMesh\Gaze\Variant;
  *
  * The dataset key is the case name so test failure messages print the variant
  * (`with data set "PolicyConfigDetail"`) instead of an opaque positional index.
+ *
+ * Two deliberate asymmetries with upstream's variant_name() set, both re-checked
+ * at the v0.12.0 pin:
+ *
+ *  - `SigPipe` is NOT an upstream wire variant — no upstream source emits
+ *    `{"error":"SigPipe"}`. It is the adapter's exit-141 signal mapping
+ *    (`Variant::unknownFor()`), for a binary killed by SIGPIPE that never got to
+ *    write an envelope. Don't go looking for it in error.rs; the row here pins
+ *    the mapping, not an upstream payload.
+ *  - Upstream also emits `Setup`, `Document`, `Mcp` and `Proxy` (from the
+ *    feature-gated `gaze setup` / `document` / `mcp` / `proxy` subcommands).
+ *    They are absent by design: the adapter never invokes those subcommands on
+ *    a path that parses a stderr envelope — the deferred surfaces are unwrapped,
+ *    and the `gaze:proxy:*` artisans stream the process and return its exit code
+ *    rather than mapping a typed exception. Wrapping any of those subcommands is
+ *    the trigger to add its variant here.
  */
 const UPSTREAM_VARIANTS = [
     'StdinParse' => ['StdinParse', 1, ['error' => 'StdinParse', 'exit' => 1]],

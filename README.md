@@ -152,6 +152,21 @@ foreach ($session->entries as $entry) {
 }
 ```
 
+### What the binary actually resolved
+
+The session also carries the rest of upstream's `stats` object, which is the
+quickest way to confirm your locale chain and rulepack dictionaries reached
+detection instead of silently falling back to defaults:
+
+```php
+$session->activeLocale();       // 'de-DE' — head of the resolved chain
+$session->localeChain;          // ['de-DE', 'en'] — priority ordered
+$session->dictionariesLoaded;   // list<LoadedDictionary>: name, termCount, source
+```
+
+Metadata only — no dictionary terms and no source text cross the surface. See
+[upstream coverage § Clean stats projection](./docs/reference/upstream-coverage.md#clean-stats-projection-v0120).
+
 See [Exceptions](./docs/reference/exceptions.md) for the exit-bucket reference and
 [Testing](./docs/how-to/testing.md) for fakes, assertions, and integration setup.
 

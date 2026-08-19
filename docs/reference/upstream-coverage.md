@@ -155,7 +155,7 @@ filtering). `--class` is a PHP reserved word as a method name, hence the
 | `--collision-family` | `whereCollisionFamily(string)` |
 | `--collision-variant` | `whereCollisionVariant(string)` |
 | `--restore-events` | `onlyRestoreEvents()` |
-| `--format` (export only) | `export()` `$format` arg, forwarded verbatim (upstream 0.11.x accepts only `jsonl`) |
+| `--format` (export only) | `export()` `$format` arg, forwarded verbatim (re-verified at the v0.12.0 pin: upstream's `ExportFormat` enum still has a single member, `jsonl`) |
 | `--output` (export only) | `export()` `$output` arg; null exports to stdout, captured on `AuditExportResult` |
 
 `gaze audit safety-net query` filters forward through
